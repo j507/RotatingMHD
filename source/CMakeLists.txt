@@ -10,12 +10,13 @@ SET(TARGET_SRC
     convection_diffusion.cc
     data_postprocessors.cc
     discrete_time.cc
-    finite_element_field.cc    
+    finite_element_field.cc
     problem_class.cc
     run_time_parameters.cc
     time_discretization.cc
     utility.cc
     vector_tools.cc
+    solver_class.cc
     # incompressible navier stokes
     navier_stokes_projection.cc
     navier_stokes_projection/assemble_advection_matrix.cc
