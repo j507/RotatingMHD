@@ -181,12 +181,12 @@ Step =      3, Current time = 1.500000e-01, Next time step = 5.000000e-02
     velocity metric = 1.020592e-03, vorticity metric = 8.075528e-02
     CFL = 0.00280606, Norms: (4.341569e-03, 2.759352e-03, 8.653707e-02)
 Step =      4, Current time = 2.000000e-01, Next time step = 5.000000e-02
-    u_x(x_1) = 1.058997e-04, T(x_1) = -5.581885e-06
-    Δp_14 = 1.297565e-03, Nusselt number = 1.773749e+01
+    u_x(x_1) = 1.058997e-04, T(x_1) = -5.582552e-06
+    Δp_14 = 1.297565e-03, Nusselt number = 1.773748e+01
     velocity metric = 1.863321e-03, vorticity metric = 1.318951e-01
     CFL = 0.00651288, Norms: (7.650244e-03, 2.653826e-03, 1.171727e-01)
 Step =      5, Current time = 2.500000e-01, Next time step = 5.000000e-02
-    u_x(x_1) = 1.794247e-04, T(x_1) = -4.805315e-06
-    Δp_14 = 1.589344e-03, Nusselt number = 1.632367e+01
+    u_x(x_1) = 1.794247e-04, T(x_1) = -4.804999e-06
+    Δp_14 = 1.589342e-03, Nusselt number = 1.632366e+01
     velocity metric = 2.857000e-03, vorticity metric = 1.834179e-01
-    CFL = 0.0112493, Norms: (1.137241e-02, 2.394075e-03, 1.429581e-01)
+    CFL = 0.0112493, Norms: (1.137241e-02, 2.391940e-03, 1.429581e-01)

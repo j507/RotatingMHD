@@ -56,7 +56,7 @@ void HeatEquation<dim>::assemble_advection_matrix()
 
   const UpdateFlags advection_update_flags = update_values|
                                              update_gradients|
-                                             update_JxW_values |
+                                             update_JxW_values|
                                              update_quadrature_points;
   WorkStream::run
   (CellFilter(IteratorFilters::LocallyOwnedCell(),

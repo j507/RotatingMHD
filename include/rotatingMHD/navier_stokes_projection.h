@@ -5,11 +5,11 @@
 #include <deal.II/base/timer.h>
 
 #include <rotatingMHD/angular_velocity.h>
-#include <rotatingMHD/assembly_data.h>
 #include <rotatingMHD/finite_element_field.h>
 #include <rotatingMHD/global.h>
 #include <rotatingMHD/run_time_parameters.h>
 #include <rotatingMHD/time_discretization.h>
+#include <rotatingMHD/navier_stokes_projection/assembly_data.h>
 
 #include <array>
 #include <memory>
@@ -645,7 +645,11 @@ private:
    */
   void assemble_local_diffusion_step_rhs(
     const typename DoFHandler<dim>::active_cell_iterator                 &cell,
-    AssemblyData::NavierStokesProjection::DiffusionStepRHS::Scratch<dim> &scratch,
+    AssemblyData::NavierStokesProjection::DiffusionStepRHS::HDScratch<dim> &scratch,
+    AssemblyData::NavierStokesProjection::DiffusionStepRHS::Copy         &data);
+  void assemble_local_diffusion_step_rhs(
+    const typename DoFHandler<dim>::active_cell_iterator                 &cell,
+    AssemblyData::NavierStokesProjection::DiffusionStepRHS::HDCScratch<dim> &scratch,
     AssemblyData::NavierStokesProjection::DiffusionStepRHS::Copy         &data);
 
   /*!
