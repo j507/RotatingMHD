@@ -481,7 +481,7 @@ void GuermondProblem<dim>::output()
 
   static int out_index = 0;
 
-  data_out.write_vtu_with_pvtu_record(this->prm.graphical_output_directory,
+  data_out.write_vtu_with_pvtu_record(parameters.output_directory,
                                       "solution",
                                       out_index,
                                       this->mpi_communicator,
@@ -541,12 +541,12 @@ void GuermondProblem<dim>::solve(const unsigned int &level)
 
     // Snapshot stage
     postprocessing((time_stepping.get_step_number() %
-                    this->prm.terminal_output_frequency == 0) ||
+                    parameters.terminal_output_frequency == 0) ||
                     (time_stepping.get_current_time() ==
                    time_stepping.get_end_time()));
 
     if ((time_stepping.get_step_number() %
-          this->prm.graphical_output_frequency == 0) ||
+         parameters.graphical_output_frequency == 0) ||
         (time_stepping.get_current_time() ==
           time_stepping.get_end_time()))
       output();
@@ -619,7 +619,7 @@ void GuermondProblem<dim>::run()
 
       time_stepping.set_desired_next_step_size(time_step);
 
-      solve(this->prm.spatial_discretization_parameters.n_initial_global_refinements);
+      solve(parameters.spatial_discretization_parameters.n_initial_global_refinements);
 
       navier_stokes.clear();
     }
@@ -632,11 +632,12 @@ void GuermondProblem<dim>::run()
   *this->pcout << pressure_convergence_table;
 
   std::ostringstream tablefilename;
-  tablefilename << ((parameters.convergence_test_parameters.test_type ==
-  									 ConvergenceTest::ConvergenceTestType::spatial)
-                     ? "Guermond_SpatialTest"
-                     : ("Guermond_TemporalTest_Level" + std::to_string(this->prm.spatial_discretization_parameters.n_initial_global_refinements)))
-                << "_Re"
+  if (parameters.convergence_test_parameters.test_type == ConvergenceTest::ConvergenceTestType::spatial)
+    tablefilename << "Guermond_SpatialTest";
+  else
+    tablefilename << "Guermond_TemporalTest_Level"
+                  << std::to_string(parameters.spatial_discretization_parameters.n_initial_global_refinements);
+  tablefilename << "_Re"
                 << parameters.Re;
 
   velocity_convergence_table.write_text(tablefilename.str() + "_Velocity");

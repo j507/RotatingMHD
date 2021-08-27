@@ -11,17 +11,17 @@
 
 namespace RMHD
 {
-
-
-
 template <int dim>
 void ConvectionDiffusionSolver<dim>::setup()
 {
+  TimerOutput::Scope  t(*computing_timer, "Convection diffusion: Setup");
+
   setup_matrices();
 
   setup_vectors();
 
-  assemble_constant_matrices();
+  flag_setup_problem = false;
+  flag_assemble_matrices = true;
 }
 
 
@@ -31,8 +31,6 @@ void ConvectionDiffusionSolver<dim>::setup_matrices()
 {
   if (parameters.verbose)
     *pcout << "  Heat Equation: Setting up matrices...";
-
-  TimerOutput::Scope  t(*computing_timer, "Heat Equation: Setup - Matrices");
 
   mass_matrix.clear();
   stiffness_matrix.clear();
@@ -107,6 +105,7 @@ void ConvectionDiffusionSolver<dim>::setup_matrices()
 
     #endif
   }
+
   if (parameters.verbose)
     *pcout << " done!" << std::endl;
 }
@@ -120,23 +119,12 @@ setup_vectors()
   if (parameters.verbose)
     *pcout << "  Heat Equation: Setting up vectors...";
 
-  TimerOutput::Scope  t(*computing_timer, "Heat Equation: Setup - Vectors");
-
   // Initializing the temperature related vectors
   rhs.reinit(temperature->distributed_vector);
 
   if (parameters.verbose)
     *pcout << " done!" << std::endl;
 }
-
-
-
-template <int dim>
-void ConvectionDiffusionSolver<dim>::set_source_term(Function<dim> &source_term)
-{
-  source_term_ptr = &source_term;
-}
-
 
 } // namespace RMHD
 
@@ -149,6 +137,3 @@ template void RMHD::ConvectionDiffusionSolver<3>::setup_matrices();
 
 template void RMHD::ConvectionDiffusionSolver<2>::setup_vectors();
 template void RMHD::ConvectionDiffusionSolver<3>::setup_vectors();
-
-template void RMHD::ConvectionDiffusionSolver<2>::set_source_term(Function<2> &);
-template void RMHD::ConvectionDiffusionSolver<3>::set_source_term(Function<3> &);

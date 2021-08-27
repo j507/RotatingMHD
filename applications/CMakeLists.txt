@@ -6,11 +6,11 @@ INCLUDE_DIRECTORIES(
     )
 
 SET(SOURCE_FILES
-    Christensen.cc
+#    Christensen.cc
     DFG.cc
-    MIT.cc
+#    MIT.cc
     step-35.cc
-    AdvectionDiffusion.cc
+#    AdvectionDiffusion.cc
     Diffusion.cc
     DiffusionTest.cc
     )

@@ -2,6 +2,7 @@
 #define INCLUDE_ROTATINGMHD_LINEAR_SOLVER_PARAMETERS_H_
 
 #include <deal.II/base/parameter_handler.h>
+
 #include <rotatingMHD/basic_parameters.h>
 
 namespace RMHD

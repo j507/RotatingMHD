@@ -17,7 +17,7 @@ void ConvectionDiffusionSolver<dim>::assemble_rhs()
     *pcout << "  Heat Equation: Assembling right hand side...";
 
   TimerOutput::Scope  t(*computing_timer,
-                        "Heat equation: RHS assembly");
+                        "Convection diffusion: RHS assembly");
 
   // Reset data
   rhs = 0.;
@@ -117,6 +117,11 @@ void ConvectionDiffusionSolver<dim>::assemble_local_rhs
   // Taylor extrapolation coefficients
   const std::vector<double> eta   = time_stepping.get_eta();
 
+  const bool explicit_advection =
+    (parameters.time_discretization ==
+     RunTimeParameters::ConvectiveTermTimeDiscretization::fully_explicit) &&
+     (velocity != nullptr || velocity_function_ptr != nullptr);
+
   // Local to global indices mapping
   cell->get_dof_indices(data.local_dof_indices);
 
@@ -199,9 +204,7 @@ void ConvectionDiffusionSolver<dim>::assemble_local_rhs
       velocity->old_old_solution,
       scratch.old_old_velocity_values);
 
-    if (parameters.convective_term_time_discretization ==
-            RunTimeParameters::ConvectiveTermTimeDiscretization::fully_explicit &&
-          (velocity != nullptr || velocity_function_ptr != nullptr))
+    if (explicit_advection)
       for (unsigned int q = 0; q < scratch.n_q_points; ++q)
         advection_term[q] =
           beta[0] *
@@ -218,9 +221,7 @@ void ConvectionDiffusionSolver<dim>::assemble_local_rhs
       scratch.temperature_fe_values.get_quadrature_points(),
       scratch.velocity_values);
 
-    if (parameters.convective_term_time_discretization ==
-          RunTimeParameters::ConvectiveTermTimeDiscretization::fully_explicit &&
-            (velocity != nullptr || velocity_function_ptr != nullptr))
+    if (explicit_advection)
       for (unsigned int q = 0; q < scratch.n_q_points; ++q)
         advection_term[q] =
           beta[0] *
@@ -245,7 +246,7 @@ void ConvectionDiffusionSolver<dim>::assemble_local_rhs
               scratch.old_old_temperature_values[q];
 
     diffusion_term[q] =
-              parameters.C4 *
+              parameters.equation_coefficient *
               (gamma[1] *
                scratch.old_temperature_gradients[q]
                +
@@ -288,14 +289,14 @@ void ConvectionDiffusionSolver<dim>::assemble_local_rhs
                scratch.phi[i]
                +
                gamma[0] *
-               parameters.C4 *
+               parameters.equation_coefficient *
                scratch.grad_phi[j] *
                scratch.grad_phi[i]) *
               scratch.temperature_fe_values.JxW(q);
 
-          if (parameters.convective_term_time_discretization ==
+          if ((parameters.time_discretization ==
                 RunTimeParameters::ConvectiveTermTimeDiscretization::semi_implicit &&
-              (velocity != nullptr || velocity_function_ptr != nullptr))
+              (velocity != nullptr || velocity_function_ptr != nullptr)))
             data.local_matrix_for_inhomogeneous_bc(j,i) +=
               (scratch.phi[j] * (
                  (velocity != nullptr)

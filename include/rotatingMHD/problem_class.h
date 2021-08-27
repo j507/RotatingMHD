@@ -8,11 +8,10 @@
 #include <deal.II/base/function.h>
 #include <deal.II/base/timer.h>
 #include <deal.II/distributed/solution_transfer.h>
-#include <deal.II/distributed/grid_refinement.h>
-#include <deal.II/fe/mapping_q.h>
-#include <deal.II/grid/grid_refinement.h>
-#include <deal.II/numerics/error_estimator.h>
+#include <deal.II/fe/mapping.h>
 #include <deal.II/numerics/solution_transfer.h>
+
+#include <filesystem>
 
 namespace RMHD
 {
@@ -149,11 +148,6 @@ protected:
   const MPI_Comm  mpi_communicator;
 
   /*!
-   * @brief The MPI communicator which is equal to `MPI_COMM_WORLD`.
-   */
-  const RunTimeParameters::ProblemBaseParameters  &prm;
-
-  /*!
    * @brief Triangulation object of the problem.
    */
   parallel::distributed::Triangulation<dim> triangulation;
@@ -162,23 +156,17 @@ protected:
    * @brief The shared pointer to the class describing the mapping from
    * the reference cell to the real cell.
    */
-  std::shared_ptr<Mapping<dim>> mapping;
+  std::shared_ptr<Mapping<dim>>       mapping;
 
   /*!
    * @brief Stream object which only prints output for one MPI process.
    */
-  std::shared_ptr<ConditionalOStream>         pcout;
+  std::shared_ptr<ConditionalOStream> pcout;
 
   /*!
    * @brief Class member used to monitor the compute time of parts of the simulation.
    */
-  std::shared_ptr<TimerOutput>                computing_timer;
-
-  /*!
-   * Struct containing all the entities to be considered during a
-   * solution transfer.
-   */
-  SolutionTransferContainer<dim>              container;
+  std::shared_ptr<TimerOutput>        computing_timer;
 
   /*!
    * @details Release all memory and return all objects to a state just like
@@ -226,13 +214,43 @@ protected:
 
   /*!
    * @brief Performs an adaptive mesh refinement.
-   * @details
    */
-  void adaptive_mesh_refinement();
+  void adaptive_mesh_refinement(const SolutionTransferContainer<dim> &container);
+
+  /*!
+   * @brief The directory were all file output is written.
+   */
+  const std::filesystem::path output_directory;
+
+private:
+  /*!
+   * @brief Fraction of cells which should be coarsened according to the metric.
+   */
+  const double  cell_fraction_to_coarsen;
+
+  /*!
+   * @brief Fraction of cells which should be refined  according to the metric.
+   */
+  const double  cell_fraction_to_refine;
+
+  /*!
+   * @brief Minimum number of levels of the triangulation.
+   */
+  const unsigned  int n_minimum_levels;
+
+  /*!
+   * @brief Maximium number of levels of the triangulation.
+   */
+  const unsigned  int n_maximum_levels;
+
+  /*
+   * @brief Flag indicating whether adaptive time stepping is applied.
+   */
+  const bool  adaptive_time_stepping;
 };
 
 // inline functions
-template<int dim>
+template <int dim>
 inline void SolutionTransferContainer<dim>::clear()
 {
   entities.clear();

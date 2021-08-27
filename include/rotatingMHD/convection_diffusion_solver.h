@@ -6,6 +6,7 @@
 #include <deal.II/base/tensor_function.h>
 
 #include <rotatingMHD/assembly_data.h>
+#include <rotatingMHD/convection_diffusion_parameters.h>
 #include <rotatingMHD/finite_element_field.h>
 #include <rotatingMHD/global.h>
 #include <rotatingMHD/run_time_parameters.h>
@@ -17,11 +18,8 @@
 
 namespace RMHD
 {
-
-using namespace dealii;
-
 /*!
- * @class HeatEquation
+ * @class ConvectionDiffusionSolver
  *
  * @brief Solves a convection-diffusion problem.
  *
@@ -43,23 +41,21 @@ using namespace dealii;
  *
  * @todo Add consistent forms of the advection term.
  */
-
 template <int dim>
 class ConvectionDiffusionSolver
 {
 
 public:
   /*!
-   * @brief The constructor of the HeatEquation class for the case
-   * where there is no advection.
+   * @brief The constructor of the ConvectionDiffusionSolver.
    *
    * @details Stores a local reference to the input parameters and
    * pointers for the mapping and terminal output entities.
    */
   ConvectionDiffusionSolver
-  (const RunTimeParameters::HeatEquationParameters  &parameters,
-   TimeDiscretization::VSIMEXMethod                 &time_stepping,
-   std::shared_ptr<Entities::FE_ScalarField<dim>>     &temperature,
+  (const ConvectionDiffusionSolverParameters       &parameters,
+   TimeDiscretization::VSIMEXMethod                &time_stepping,
+   std::shared_ptr<Entities::FE_ScalarField<dim>>  &temperature,
    const std::shared_ptr<Mapping<dim>>              external_mapping =
        std::shared_ptr<Mapping<dim>>(),
    const std::shared_ptr<ConditionalOStream>        external_pcout =
@@ -68,42 +64,11 @@ public:
        std::shared_ptr<TimerOutput>());
 
   /*!
-   * @brief The constructor of the HeatEquation class for the case
-   * where the velocity field is given by a FE_VectorField instance.
-   *
-   * @details Stores a local reference to the input parameters and
-   * pointers for the mapping and terminal output entities.
+   * @details Release all memory and return all objects to a state just like
+   * after having called the default constructor.
    */
-  ConvectionDiffusionSolver
-  (const RunTimeParameters::HeatEquationParameters  &parameters,
-   TimeDiscretization::VSIMEXMethod                 &time_stepping,
-   std::shared_ptr<Entities::FE_ScalarField<dim>>     &temperature,
-   std::shared_ptr<Entities::FE_VectorField<dim>>     &velocity,
-   const std::shared_ptr<Mapping<dim>>              external_mapping =
-       std::shared_ptr<Mapping<dim>>(),
-   const std::shared_ptr<ConditionalOStream>        external_pcout =
-       std::shared_ptr<ConditionalOStream>(),
-   const std::shared_ptr<TimerOutput>               external_timer =
-       std::shared_ptr<TimerOutput>());
+  void clear();
 
-  /*!
-   * @brief The constructor of the HeatEquation class for the case
-   *  where the velocity is given by a TensorFunction.
-   *
-   * @details Stores a local reference to the input parameters and
-   * pointers for the mapping and terminal output entities.
-   */
-  ConvectionDiffusionSolver
-  (const RunTimeParameters::HeatEquationParameters  &parameters,
-   TimeDiscretization::VSIMEXMethod                 &time_stepping,
-   std::shared_ptr<Entities::FE_ScalarField<dim>>     &temperature,
-   std::shared_ptr<TensorFunction<1, dim>>          &velocity,
-   const std::shared_ptr<Mapping<dim>>              external_mapping =
-       std::shared_ptr<Mapping<dim>>(),
-   const std::shared_ptr<ConditionalOStream>        external_pcout =
-       std::shared_ptr<ConditionalOStream>(),
-   const std::shared_ptr<TimerOutput>               external_timer =
-       std::shared_ptr<TimerOutput>());
   /*!
    *  @brief Setups and initializes all the internal entities for
    *  the heat equation problem.
@@ -118,15 +83,25 @@ public:
    *  @brief Sets the source term of the problem.
    *
    *  @details Stores the memory address of the source term function in
-   *  the pointer @ref suppler_term_ptr.
+   *  the pointer @ref supply_term_ptr.
    */
   void set_source_term(Function<dim> &source_term);
 
   /*!
-   * @brief Computes the scalar field \f$ u \f$ at \f$ t = t_1 \f$ using a
-   * first order time discretization scheme.
+   *  @brief Sets the velocity of the problem.
+   *
+   *  @details Stores the memory address of the velocity function in
+   *  the pointer @ref velocity_function_ptr.
    */
-  void initialize();
+  void set_velocity(TensorFunction<1, dim> &velocity_function);
+
+  /*!
+   *  @brief Sets the velocity of the problem.
+   *
+   *  @details Stores the memory address of the velocity field in
+   *  the pointer @ref velocity_function_ptr.
+   */
+  void set_velocity(std::shared_ptr<const Entities::FE_VectorField<dim>> &velocity);
 
   /*!
    *  @brief Solves the heat equation problem for one single timestep.
@@ -143,32 +118,32 @@ private:
   /*!
    * @brief A reference to the parameters which control the solution process.
    */
-  const RunTimeParameters::HeatEquationParameters &parameters;
+  const ConvectionDiffusionSolverParameters &parameters;
 
   /*!
    * @brief The MPI communicator which is equal to `MPI_COMM_WORLD`.
    */
-  const MPI_Comm                                 mpi_communicator;
+  const MPI_Comm                             mpi_communicator;
 
   /*!
    * @brief A reference to the class controlling the temporal discretization.
    */
-  const TimeDiscretization::VSIMEXMethod        &time_stepping;
+  const TimeDiscretization::VSIMEXMethod     &time_stepping;
 
   /*!
    * @brief A shared pointer to a conditional output stream object.
    */
-  std::shared_ptr<ConditionalOStream>           pcout;
+  std::shared_ptr<ConditionalOStream>         pcout;
 
   /*!
    * @brief A shared pointer to a monitor of the computing times.
    */
-  std::shared_ptr<TimerOutput>                  computing_timer;
+  std::shared_ptr<TimerOutput>                computing_timer;
 
   /*!
    * @brief A shared pointer to the mapping to be used throughout the solver.
    */
-  std::shared_ptr<Mapping<dim>>                 mapping;
+  std::shared_ptr<Mapping<dim>>               mapping;
 
   /*!
    * @brief A shared pointer to the entity of the scalar field.
@@ -183,12 +158,12 @@ private:
   /*!
    * @brief A shared pointer to the TensorFunction of the velocity field.
    */
-  std::shared_ptr<TensorFunction<1,dim>>        velocity_function_ptr;
+  TensorFunction<1,dim>*          velocity_function_ptr;
 
   /*!
    * @brief A pointer to the supply term function.
    */
-  Function<dim>                                 *source_term_ptr;
+  Function<dim>                  *source_term_ptr;
 
   /*!
    * @brief System matrix for the heat equation.
@@ -255,9 +230,20 @@ private:
   std::shared_ptr<LinearAlgebra::PreconditionBase> preconditioner;
 
   /*!
-   * @brief A flag indicating if the matrices were updated.
+   * @brief A flag indicating if the matrices should be assembled.
    */
-  bool                                          flag_matrices_were_updated;
+  bool                                          flag_assemble_matrices;
+
+  /*!
+   * @brief A flag indicating if a setup of sparsity pattern and vectors
+   * is required.
+   */
+  bool                                          flag_setup_problem;
+
+  /*!
+   * @brief A flag indicating if the preconditioner should be updated.
+   */
+  bool                                          flag_update_preconditioner;
 
   /*!
    * @brief Setup of the sparsity spatterns of the matrices.
@@ -299,7 +285,7 @@ private:
    * @brief Solves the linear system.
    * @details Pending.
    */
-  void solve_linear_system(const bool reinit_preconditioner);
+  void solve_linear_system();
 
   /*!
    * @brief This method assembles the mass matrix on a single cell.

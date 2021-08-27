@@ -7,33 +7,28 @@ namespace RMHD
 template <int dim>
 void ConvectionDiffusionSolver<dim>::solve()
 {
-  if (temperature->solution.size() != mass_matrix.m())
-  {
-    setup();
-    flag_matrices_were_updated = true;
-  }
+  AssertThrow(flag_setup_problem == false,
+              ExcMessage("ConvectionDiffusionSolver<dim>::setup was not called."));
 
   assemble_linear_system();
 
-  rhs_norm = rhs.l2_norm();
+  flag_update_preconditioner |= (time_stepping.get_step_number() %
+                                 parameters.preconditioner_update_frequency == 0);
+  flag_update_preconditioner |= (time_stepping.get_step_number() == 1);
 
-  solve_linear_system(flag_matrices_were_updated ||
-                      time_stepping.get_step_number() %
-                      parameters.preconditioner_update_frequency == 0 ||
-                      time_stepping.get_step_number() == 1);
-
-  flag_matrices_were_updated = false;
+  solve_linear_system();
 }
 
 template <int dim>
 void ConvectionDiffusionSolver<dim>::assemble_linear_system()
 {
-  // System matrix setup
-  if (time_stepping.coefficients_changed() == true ||
-      flag_matrices_were_updated)
-  {
-      TimerOutput::Scope  t(*computing_timer, "Heat Equation: Matrix summation");
+  computing_timer->enter_subsection("Convection diffusion: Matrix assembly");
 
+  // System matrix setup
+  if (flag_assemble_matrices)
+    assemble_constant_matrices();
+  if (time_stepping.coefficients_changed() == true || flag_assemble_matrices)
+  {
     mass_plus_stiffness_matrix = 0.;
 
     mass_plus_stiffness_matrix.add(
@@ -41,30 +36,35 @@ void ConvectionDiffusionSolver<dim>::assemble_linear_system()
       mass_matrix);
 
     mass_plus_stiffness_matrix.add(
-      time_stepping.get_gamma()[0] * parameters.C4,
+      time_stepping.get_gamma()[0] * parameters.equation_coefficient,
       stiffness_matrix);
-  }
 
-  if (parameters.convective_term_time_discretization ==
-        RunTimeParameters::ConvectiveTermTimeDiscretization::semi_implicit &&
+    flag_update_preconditioner = true;
+  }
+  flag_assemble_matrices = false;
+
+  if ((parameters.time_discretization ==
+       RunTimeParameters::ConvectiveTermTimeDiscretization::semi_implicit) &&
       (velocity != nullptr || velocity_function_ptr != nullptr))
   {
     assemble_advection_matrix();
     system_matrix.copy_from(mass_plus_stiffness_matrix);
     system_matrix.add(1.0, advection_matrix);
   }
+  computing_timer->leave_subsection();
 
   // Right hand side setup
   assemble_rhs();
+  rhs_norm = rhs.l2_norm();
 }
 
 template <int dim>
-void ConvectionDiffusionSolver<dim>::solve_linear_system(const bool reinit_preconditioner)
+void ConvectionDiffusionSolver<dim>::solve_linear_system()
 {
   if (parameters.verbose)
   *pcout << "  Heat Equation: Solving linear system...";
 
-  TimerOutput::Scope  t(*computing_timer, "Heat Equation: Solve");
+  TimerOutput::Scope  t(*computing_timer, "Convection diffusion: Solve");
 
   // In this method we create temporal non ghosted copies
   // of the pertinent vectors to be able to perform the solve()
@@ -72,11 +72,11 @@ void ConvectionDiffusionSolver<dim>::solve_linear_system(const bool reinit_preco
   LinearAlgebra::MPI::Vector distributed_temperature(rhs);
   distributed_temperature = temperature->solution;
 
-  /* The following pointer holds the address to the correct matrix
-  depending on if the semi-implicit scheme is chosen or not */
+  // The following pointer holds the address to the correct matrix
+  // depending on if the semi-implicit scheme is chosen or not
   const LinearAlgebra::MPI::SparseMatrix  *system_matrix_ptr;
-  if (parameters.convective_term_time_discretization ==
-        RunTimeParameters::ConvectiveTermTimeDiscretization::semi_implicit &&
+  if ((parameters.time_discretization ==
+       RunTimeParameters::ConvectiveTermTimeDiscretization::semi_implicit) &&
       (velocity != nullptr || velocity_function_ptr != nullptr))
     system_matrix_ptr = &system_matrix;
   else
@@ -84,9 +84,9 @@ void ConvectionDiffusionSolver<dim>::solve_linear_system(const bool reinit_preco
 
 
   const typename RunTimeParameters::LinearSolverParameters &solver_parameters
-    = parameters.solver_parameters;
+    = parameters.linear_solver;
 
-  if (reinit_preconditioner)
+  if (flag_update_preconditioner)
   {
     build_preconditioner(preconditioner,
                          *system_matrix_ptr,
@@ -160,5 +160,5 @@ template void RMHD::ConvectionDiffusionSolver<3>::solve();
 template void RMHD::ConvectionDiffusionSolver<2>::assemble_linear_system();
 template void RMHD::ConvectionDiffusionSolver<3>::assemble_linear_system();
 
-template void RMHD::ConvectionDiffusionSolver<2>::solve_linear_system(const bool);
-template void RMHD::ConvectionDiffusionSolver<3>::solve_linear_system(const bool);
+template void RMHD::ConvectionDiffusionSolver<2>::solve_linear_system();
+template void RMHD::ConvectionDiffusionSolver<3>::solve_linear_system();

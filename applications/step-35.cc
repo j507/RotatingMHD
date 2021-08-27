@@ -178,9 +178,9 @@ evaluation_point(2.0, 3.0)
   velocity->setup_vectors();
   pressure->setup_vectors();
   initialize();
-  this->container.add_entity(*velocity);
-  this->container.add_entity(*pressure, false);
-  this->container.add_entity(*navier_stokes.phi, false);
+//  this->container.add_entity(*velocity);
+//  this->container.add_entity(*pressure, false);
+//  this->container.add_entity(*navier_stokes.phi, false);
 }
 
 template <int dim>
@@ -323,7 +323,7 @@ void Step35Problem<dim>::output()
 
   static int out_index = 0;
 
-  data_out.write_vtu_with_pvtu_record(this->prm.graphical_output_directory,
+  data_out.write_vtu_with_pvtu_record(parameters.output_directory,
                                       "solution",
                                       out_index,
                                       this->mpi_communicator,
@@ -371,16 +371,22 @@ void Step35Problem<dim>::run()
 
     // Snapshot stage
     if (time_stepping.get_step_number() %
-         this->prm.terminal_output_frequency == 0 ||
+        parameters.terminal_output_frequency == 0 ||
         time_stepping.get_current_time() == time_stepping.get_end_time())
       postprocessing();
 
     if (time_stepping.get_step_number() %
-        this->prm.spatial_discretization_parameters.adaptive_mesh_refinement_frequency == 0)
-      this->adaptive_mesh_refinement();
+        parameters.spatial_discretization_parameters.adaptive_mesh_refinement_frequency == 0)
+    {
+      SolutionTransferContainer<dim> container;
+      container.add_entity(*velocity);
+      container.add_entity(*pressure, false);
+      container.add_entity(*navier_stokes.phi, false);
+      this->adaptive_mesh_refinement(container);
+    }
 
     if ((time_stepping.get_step_number() %
-          this->prm.graphical_output_frequency == 0) ||
+         parameters.graphical_output_frequency == 0) ||
         (time_stepping.get_current_time() ==
                    time_stepping.get_end_time()))
       output();

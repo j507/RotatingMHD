@@ -1,9 +1,11 @@
+#include <deal.II/base/quadrature_lib.h>
+#include <deal.II/distributed/grid_refinement.h>
+#include <deal.II/fe/mapping_q.h>
+#include <deal.II/numerics/error_estimator.h>
+
 #include <rotatingMHD/problem_class.h>
 
-#include <deal.II/base/quadrature_lib.h>
-
 #include <exception>
-#include <filesystem>
 #include <string>
 
 namespace RMHD
@@ -164,10 +166,9 @@ SolutionTransferContainer<dim>::get_transfer_vectors() const
 
 
 template<int dim>
-Problem<dim>::Problem(const RunTimeParameters::ProblemBaseParameters &prm_)
+Problem<dim>::Problem(const RunTimeParameters::ProblemBaseParameters &prm)
 :
 mpi_communicator(MPI_COMM_WORLD),
-prm(prm_),
 triangulation(mpi_communicator,
               typename Triangulation<dim>::MeshSmoothing(
               Triangulation<dim>::smoothing_on_refinement |
@@ -180,39 +181,47 @@ computing_timer(
   std::make_shared<TimerOutput>(mpi_communicator,
                                 *pcout,
                                 (prm.verbose? TimerOutput::summary: TimerOutput::never),
-                                TimerOutput::wall_times))
+                                TimerOutput::wall_times)),
+output_directory(prm.output_directory),
+cell_fraction_to_coarsen{prm.spatial_discretization_parameters.cell_fraction_to_coarsen},
+cell_fraction_to_refine{prm.spatial_discretization_parameters.cell_fraction_to_refine},
+n_minimum_levels{prm.spatial_discretization_parameters.n_minimum_levels},
+n_maximum_levels{prm.spatial_discretization_parameters.n_maximum_levels},
+adaptive_time_stepping{prm.time_discretization_parameters.adaptive_time_stepping}
 {
-  if (!std::filesystem::exists(prm.graphical_output_directory) &&
-      Utilities::MPI::this_mpi_process(this->mpi_communicator) == 0)
+  if (Utilities::MPI::this_mpi_process(this->mpi_communicator) == 0)
   {
-    try
+    if (!std::filesystem::exists(output_directory))
     {
-      std::filesystem::create_directories(prm.graphical_output_directory);
-    }
-    catch (std::exception &exc)
-    {
-      std::cerr << std::endl << std::endl
-                << "----------------------------------------------------"
-                << std::endl;
-      std::cerr << "Exception in the creation of the output directory: "
-                << std::endl
-                << exc.what() << std::endl
-                << "Aborting!" << std::endl
-                << "----------------------------------------------------"
-                << std::endl;
-      std::abort();
-    }
-    catch (...)
-    {
-      std::cerr << std::endl << std::endl
-                << "----------------------------------------------------"
+      try
+      {
+        std::filesystem::create_directories(output_directory);
+      }
+      catch (std::exception &exc)
+      {
+        std::cerr << std::endl << std::endl
+                  << "----------------------------------------------------"
                   << std::endl;
-      std::cerr << "Unknown exception in the creation of the output directory!"
-                << std::endl
-                << "Aborting!" << std::endl
-                << "----------------------------------------------------"
-                << std::endl;
-      std::abort();
+        std::cerr << "Exception in the creation of the output directory: "
+                  << std::endl
+                  << exc.what() << std::endl
+                  << "Aborting!" << std::endl
+                  << "----------------------------------------------------"
+                  << std::endl;
+        std::abort();
+      }
+      catch (...)
+      {
+        std::cerr << std::endl << std::endl
+                  << "----------------------------------------------------"
+                    << std::endl;
+        std::cerr << "Unknown exception in the creation of the output directory!"
+                  << std::endl
+                  << "Aborting!" << std::endl
+                  << "----------------------------------------------------"
+                  << std::endl;
+        std::abort();
+      }
     }
   }
 }
@@ -222,8 +231,6 @@ computing_timer(
 template <int dim>
 void Problem<dim>::clear()
 {
-  container.clear();
-
   triangulation.clear();
 }
 
@@ -287,8 +294,7 @@ double Problem<dim>::compute_next_time_step
  const double                           cfl_number,
  const double                           max_cfl_number) const
 {
-  if (!prm.time_discretization_parameters.adaptive_time_stepping ||
-      time_stepping.get_step_number() == 0)
+  if (!adaptive_time_stepping || time_stepping.get_step_number() == 0)
     return time_stepping.get_next_step_size();
   else if (cfl_number < 1e-6)
     return time_stepping.get_next_step_size();
@@ -297,7 +303,8 @@ double Problem<dim>::compute_next_time_step
 }
 
 template <int dim>
-void Problem<dim>::adaptive_mesh_refinement()
+void Problem<dim>::adaptive_mesh_refinement
+(const SolutionTransferContainer<dim> &container)
 {
   Assert(!container.empty(),
          ExcMessage("The entities container is empty."))
@@ -363,21 +370,18 @@ void Problem<dim>::adaptive_mesh_refinement()
 
     // Indicates which cells are to be refine/coarsen
     parallel::distributed::
-    GridRefinement::refine_and_coarsen_fixed_fraction(
-      triangulation,
-      estimated_error_per_cell,
-      prm.spatial_discretization_parameters.cell_fraction_to_coarsen,
-      prm.spatial_discretization_parameters.cell_fraction_to_refine);
+    GridRefinement::refine_and_coarsen_fixed_fraction(triangulation,
+                                                      estimated_error_per_cell,
+                                                      cell_fraction_to_coarsen,
+                                                      cell_fraction_to_refine);
 
     // Clear refinement flags if refinement level exceeds maximum
-    if (triangulation.n_global_levels() > prm.spatial_discretization_parameters.n_maximum_levels)
-      for (auto cell: triangulation.active_cell_iterators_on_level(
-                        prm.spatial_discretization_parameters.n_maximum_levels))
+    if (triangulation.n_global_levels() > n_maximum_levels)
+      for (auto cell: triangulation.active_cell_iterators_on_level(n_maximum_levels))
         cell->clear_refine_flag();
 
     // Clear coarsen flags if level decreases minimum
-    for (auto cell: triangulation.active_cell_iterators_on_level(
-                      prm.spatial_discretization_parameters.n_minimum_levels))
+    for (auto cell: triangulation.active_cell_iterators_on_level(n_minimum_levels))
         cell->clear_coarsen_flag();
 
     // Count number of cells to be refined and coarsened

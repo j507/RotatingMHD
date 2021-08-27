@@ -290,7 +290,7 @@ void Diffusion<dim>::output()
   data_out.build_patches(scalar_field->fe_degree());
 
   static int out_index = 0;
-  data_out.write_vtu_with_pvtu_record(this->prm.graphical_output_directory,
+  data_out.write_vtu_with_pvtu_record(parameters.output_directory,
                                       "Solution",
                                       out_index,
                                       this->mpi_communicator,
@@ -335,7 +335,7 @@ void Diffusion<dim>::solve()
 
     // Snapshot stage, all time calls should be done with get_next_time()
     if ((time_stepping.get_step_number() %
-          this->prm.graphical_output_frequency == 0) ||
+         parameters.graphical_output_frequency == 0) ||
         (time_stepping.get_current_time() ==
           time_stepping.get_end_time()))
       output();

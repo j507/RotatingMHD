@@ -1,9 +1,14 @@
 #ifndef INCLUDE_ROTATINGMHD_BASIC_PARAMETERS_H_
 #define INCLUDE_ROTATINGMHD_BASIC_PARAMETERS_H_
 
+#include <deal.II/base/parameter_handler.h>
+
+#include <rotatingMHD/time_discretization.h>
 
 namespace RMHD
 {
+
+using namespace dealii;
 
 /*!
  * @brief Namespace containing all the structs and enum classes related
@@ -378,6 +383,239 @@ enum class PreconditionerType
   SSOR
 
 };
+
+
+/*!
+ * @struct OutputControlParameters
+ * @brief @ref OutputControlParameters contains parameters which are
+ * related to the graphical and terminal output.
+ */
+struct OutputControlParameters
+{
+  /*!
+   * @brief Constructor which sets up the parameters with default values.
+   */
+  OutputControlParameters();
+
+  /*!
+   * @brief Static method which declares the associated parameter to the
+   * ParameterHandler object @p prm.
+   */
+  static void declare_parameters(ParameterHandler &prm);
+
+  /*!
+   * @brief Method which parses the parameters from the ParameterHandler
+   * object @p prm.
+   */
+  void parse_parameters(ParameterHandler &prm);
+
+  /*!
+   * @brief Method forwarding parameters to a stream object.
+   *
+   * @details This method does not add a `std::endl` to the stream at the end.
+   */
+  template<typename Stream>
+  friend Stream& operator<<(Stream &stream,
+                            const OutputControlParameters &prm);
+
+  /*!
+   * @brief The frequency at which a graphical output file (vtk output) is
+   * written to the file system.
+   */
+  unsigned int  graphical_output_frequency;
+
+  /*!
+   * @brief The frequency at which diagnostics are written the terminal.
+   */
+  unsigned int  terminal_output_frequency;
+
+  /*!
+   * @brief The frequency at which postprocessing of the results is performed.
+   */
+  unsigned int  postprocessing_frequency;
+
+  /*!
+   * @brief Directory where the output should be written.
+   */
+  std::string   output_directory;
+};
+
+/*!
+ * @brief Method forwarding parameters to a stream object.
+ *
+ * @details This method does not add a `std::endl` to the stream at the end.
+ */
+template<typename Stream>
+Stream& operator<<(Stream &stream, const OutputControlParameters &prm);
+
+
+/*!
+ * @struct SpatialDiscretizationParameters
+ *
+ * @brief @ref SpatialDiscretizationParameters contains parameters which are
+ * related to the adaptive refinement of the mesh.
+ */
+struct SpatialDiscretizationParameters
+{
+  /*!
+   * @brief Constructor which sets up the parameters with default values.
+   */
+  SpatialDiscretizationParameters();
+
+  /*!
+   * @brief Static method which declares the associated parameter to the
+   * ParameterHandler object @p prm.
+   */
+  static void declare_parameters(ParameterHandler &prm);
+
+  /*!
+   * @brief Method which parses the parameters from the ParameterHandler
+   * object @p prm.
+   */
+  void parse_parameters(ParameterHandler &prm);
+
+  /*!
+   * @brief Method forwarding parameters to a stream object.
+   *
+   * @details This method does not add a `std::endl` to the stream at the end.
+   */
+  template<typename Stream>
+  friend Stream& operator<<(Stream &stream,
+                            const SpatialDiscretizationParameters &prm);
+
+  /*!
+   * @brief Boolean flag to enable or disable adaptive mesh refinement.
+   */
+  bool          adaptive_mesh_refinement;
+
+  /*!
+   * @brief The frequency at which an adaptive mesh refinement is performed.
+   */
+  unsigned int  adaptive_mesh_refinement_frequency;
+
+  /*!
+   * @brief The upper fraction of the total number of cells set to
+   * coarsen.
+   */
+  double        cell_fraction_to_coarsen;
+
+  /*!
+   * @brief The lower fraction of the total number of cells set to
+   * refine.
+   */
+  double        cell_fraction_to_refine;
+
+  /*!
+   * @brief The number of maximum levels of the mesh. This parameter prohibits
+   * a further refinement of the mesh.
+   */
+  unsigned int  n_maximum_levels;
+
+  /*!
+   * @brief The number of minimum levels of the mesh. This parameter prohibits
+   * a further coarsening of the mesh.
+   */
+  unsigned int  n_minimum_levels;
+
+  /*!
+   * @brief The number of adaptive initial refinement steps. This parameter
+   * determines the number of refinements which are based on the spatial structure
+   * of the initial condition.
+   */
+  unsigned int  n_initial_adaptive_refinements;
+
+  /*!
+   * @brief The number of global initial refinement steps.
+   */
+  unsigned int  n_initial_global_refinements;
+
+   /*!
+   * @brief The number of initial refinement steps of cells at the boundary.
+   */
+  unsigned int  n_initial_boundary_refinements;
+};
+
+
+
+/*!
+ * @brief Method forwarding parameters to a stream object.
+ *
+ * @details This method does not add a `std::endl` to the stream at the end.
+ */
+template<typename Stream>
+Stream& operator<<(Stream &stream, const SpatialDiscretizationParameters &prm);
+
+
+
+
+
+/*!
+ * @struct ProblemBaseParameters
+ */
+struct ProblemBaseParameters : public OutputControlParameters
+{
+  /*!
+   * @brief Constructor which sets up the parameters with default values.
+   */
+  ProblemBaseParameters();
+
+  /*!
+   * @brief Static method which declares the associated parameter to the
+   * ParameterHandler object @p prm.
+   */
+  static void declare_parameters(ParameterHandler &prm);
+
+  /*!
+   * @brief Method which parses the parameters from the ParameterHandler
+   * object @p prm.
+   */
+  void parse_parameters(ParameterHandler &prm);
+
+  /*!
+   * @brief Method forwarding parameters to a stream object.
+   */
+  template<typename Stream>
+  friend Stream& operator<<(Stream &stream,
+                            const ProblemBaseParameters &prm);
+
+  /*!
+   * @brief Spatial dimension of the problem.
+   */
+  unsigned int                                dim;
+
+  /*!
+   * @brief Polynomial degree of the mapping.
+   */
+  unsigned int                                mapping_degree;
+
+  /*!
+   * @brief Boolean indicating whether the mapping should be applied for
+   * the interior cells as well.
+   */
+  bool                                        mapping_interior_cells;
+
+  /*!
+   * @brief Boolean flag to enable verbose output on the terminal.
+   */
+  bool                                        verbose;
+
+  /*!
+   * @brief Parameters of the adaptive mesh refinement.
+   */
+  SpatialDiscretizationParameters             spatial_discretization_parameters;
+
+  /*!
+   * @brief Parameters of the time stepping scheme.
+   */
+  TimeDiscretization::TimeDiscretizationParameters  time_discretization_parameters;
+};
+
+/*!
+ * @brief Method forwarding parameters to a stream object.
+ */
+template<typename Stream>
+Stream& operator<<(Stream &stream, const ProblemBaseParameters &prm);
+
 
 } // namespace RunTimeParameters
 

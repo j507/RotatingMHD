@@ -365,6 +365,8 @@ public:
 
 private:
 
+  const RunTimeParameters::ProblemParameters &parameters;
+
   const types::boundary_id  channel_wall_bndry_id{3};
   const types::boundary_id  cylinder_bndry_id{2};
   const types::boundary_id  channel_inlet_bndry_id{0};
@@ -404,6 +406,7 @@ private:
 template <int dim>
 DFG<dim>::DFG(const RunTimeParameters::ProblemParameters &parameters)
 :
+parameters(parameters),
 Problem<dim>(parameters),
 velocity(std::make_shared<Entities::FE_VectorField<dim>>
          (parameters.fe_degree_velocity,
@@ -432,9 +435,9 @@ pressure_initial_condition()
   velocity->setup_vectors();
   pressure->setup_vectors();
   initialize();
-  this->container.add_entity(*velocity);
-  this->container.add_entity(*pressure, false);
-  this->container.add_entity(*navier_stokes.phi, false);
+//  this->container.add_entity(*velocity);
+//  this->container.add_entity(*pressure, false);
+//  this->container.add_entity(*navier_stokes.phi, false);
 }
 
 
@@ -474,11 +477,11 @@ void DFG<2>::make_grid()
   this->triangulation.set_manifold(1, inner_manifold);
 
   // Perform global refinements
-  this->triangulation.refine_global(prm.spatial_discretization_parameters.n_initial_global_refinements);
+  this->triangulation.refine_global(parameters.spatial_discretization_parameters.n_initial_global_refinements);
 
   // Perform one level local refinement of the cells located at the boundary
   for (unsigned int i=0;
-       i<prm.spatial_discretization_parameters.n_initial_boundary_refinements;
+       i<parameters.spatial_discretization_parameters.n_initial_boundary_refinements;
        ++i)
   {
     for (auto &cell: this->triangulation.active_cell_iterators())
@@ -595,7 +598,7 @@ void DFG<dim>::output()
 
   static int out_index = 0;
 
-  data_out.write_vtu_with_pvtu_record(this->prm.graphical_output_directory,
+  data_out.write_vtu_with_pvtu_record(parameters.output_directory,
                                       "solution",
                                       out_index,
                                       this->mpi_communicator,
@@ -614,7 +617,7 @@ void DFG<dim>::update_solution_vectors()
 template <int dim>
 void DFG<dim>::run()
 {
-  const unsigned int n_steps = this->prm.time_discretization_parameters.n_maximum_steps;
+  const unsigned int n_steps = parameters.time_discretization_parameters.n_maximum_steps;
 
   *this->pcout << "Solving until t = 350..." << std::endl;
 
@@ -646,7 +649,7 @@ void DFG<dim>::run()
 
     // Snapshot stage, all time calls should be done with get_current_time()
     if ((time_stepping.get_step_number() %
-          this->prm.terminal_output_frequency == 0) ||
+         parameters.terminal_output_frequency == 0) ||
         (time_stepping.get_next_time() ==
           time_stepping.get_end_time()))
       postprocessing();
@@ -692,13 +695,13 @@ void DFG<dim>::run()
 
     // Snapshot stage, all time calls should be done with get_current_time()
     if ((time_stepping.get_step_number() %
-          this->prm.terminal_output_frequency == 0) ||
+        parameters.terminal_output_frequency == 0) ||
         (time_stepping.get_next_time() ==
           time_stepping.get_end_time()))
       postprocessing();
 
     if ((time_stepping.get_step_number() %
-          this->prm.graphical_output_frequency == 0) ||
+         parameters.graphical_output_frequency == 0) ||
         (time_stepping.get_next_time() ==
           time_stepping.get_end_time()))
       output();
@@ -706,11 +709,11 @@ void DFG<dim>::run()
 
   if (Utilities::MPI::this_mpi_process(this->mpi_communicator) == 0)
   {
-    if (!std::filesystem::exists(this->prm.graphical_output_directory))
+    if (!std::filesystem::exists(parameters.output_directory))
     {
       try
       {
-        std::filesystem::create_directories(this->prm.graphical_output_directory);
+        std::filesystem::create_directories(parameters.output_directory);
       }
       catch (std::exception &exc)
       {
@@ -739,7 +742,7 @@ void DFG<dim>::run()
       }
     }
 
-    const std::filesystem::path path{this->prm.graphical_output_directory};
+    const std::filesystem::path path{parameters.output_directory};
 
     std::filesystem::path filename = path / "benchmark_data.txt";
 

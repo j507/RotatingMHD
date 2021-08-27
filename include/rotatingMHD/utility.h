@@ -9,7 +9,7 @@
 #define INCLUDE_ROTATINGMHD_UTILITY_H_
 
 #include <rotatingMHD/global.h>
-#include <rotatingMHD/run_time_parameters.h>
+#include <rotatingMHD/linear_solver_parameters.h>
 
 #include <memory>
 

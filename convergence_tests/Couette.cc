@@ -17,6 +17,7 @@
 #include <rotatingMHD/convergence_test.h>
 #include <rotatingMHD/finite_element_field.h>
 
+#include <sstream>
 #include <memory>
 
 namespace Couette
@@ -443,7 +444,7 @@ void CouetteFlowProblem<dim>::output()
 
   static int out_index = 0;
 
-  data_out.write_vtu_with_pvtu_record(this->prm.graphical_output_directory,
+  data_out.write_vtu_with_pvtu_record(parameters.output_directory,
                                       "solution",
                                       out_index,
                                       this->mpi_communicator,
@@ -493,14 +494,14 @@ void CouetteFlowProblem<dim>::solve(const unsigned int &level)
 
     // Post-processing
     if ((time_stepping.get_step_number() %
-          this->prm.terminal_output_frequency == 0) ||
+         parameters.terminal_output_frequency == 0) ||
         (time_stepping.get_current_time() ==
           time_stepping.get_end_time()))
       postprocessing();
 
     // Graphical output
     if ((time_stepping.get_step_number() %
-          this->prm.graphical_output_frequency == 0) ||
+         parameters.graphical_output_frequency == 0) ||
         (time_stepping.get_current_time() ==
           time_stepping.get_end_time()))
       output();
@@ -581,11 +582,12 @@ void CouetteFlowProblem<dim>::run()
   *(this->pcout) << convergence_table;
 
   std::ostringstream tablefilename;
-  tablefilename << ((parameters.convergence_test_parameters.test_type ==
-                      ConvergenceTest::ConvergenceTestType::spatial)
-                     ? "Couette_SpatialTest"
-                     : ("Couette_TemporalTest_Level" + std::to_string(parameters.spatial_discretization_parameters.n_initial_global_refinements)))
-                << "_Re"
+  if (parameters.convergence_test_parameters.test_type == ConvergenceTest::ConvergenceTestType::spatial)
+    tablefilename << "Couette_SpatialTest";
+  else
+    tablefilename << "Couette_TemporalTest_Level"
+                  << std::to_string(parameters.spatial_discretization_parameters.n_initial_global_refinements);
+  tablefilename << "_Re"
                 << parameters.Re;
 
   convergence_table.write_text(tablefilename.str() + "_Velocity");

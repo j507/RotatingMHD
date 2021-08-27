@@ -80,6 +80,6 @@ ADD_SUBDIRECTORY(applications)
 ADD_SUBDIRECTORY(convergence_tests)
 ADD_SUBDIRECTORY(tests/rotatingMHD)
 ADD_SUBDIRECTORY(tests/applications/DFG)
-ADD_SUBDIRECTORY(tests/applications/MIT)
+# ADD_SUBDIRECTORY(tests/applications/MIT)
 
 MESSAGE("====================================================")

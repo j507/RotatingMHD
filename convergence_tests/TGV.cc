@@ -436,7 +436,7 @@ void TGVProblem<dim>::output()
 
   static int out_index = 0;
 
-  data_out.write_vtu_with_pvtu_record(this->prm.graphical_output_directory,
+  data_out.write_vtu_with_pvtu_record(parameters.output_directory,
                                       "solution",
                                       out_index,
                                       this->mpi_communicator,
@@ -505,12 +505,12 @@ void TGVProblem<dim>::solve(const unsigned int &level)
 
     // Snapshot stage, all time calls should be done with get_current_time()
     postprocessing((time_stepping.get_step_number() %
-                    this->prm.terminal_output_frequency == 0) ||
+                    parameters.terminal_output_frequency == 0) ||
                     (time_stepping.get_current_time() ==
                    time_stepping.get_end_time()));
 
     if ((time_stepping.get_step_number() %
-          this->prm.graphical_output_frequency == 0) ||
+          parameters.graphical_output_frequency == 0) ||
         (time_stepping.get_current_time() ==
           time_stepping.get_end_time()))
       output();
@@ -601,11 +601,12 @@ void TGVProblem<dim>::run()
   *this->pcout << pressure_convergence_table;
 
   std::ostringstream tablefilename;
-  tablefilename << ((parameters.convergence_test_parameters.test_type ==
-  									ConvergenceTest::ConvergenceTestType::spatial)
-                     ? "TGV_SpatialTest"
-                     : ("TGV_TemporalTest_Level" + std::to_string(parameters.spatial_discretization_parameters.n_initial_global_refinements)))
-                << "_Re"
+  if (parameters.convergence_test_parameters.test_type == ConvergenceTest::ConvergenceTestType::spatial)
+    tablefilename << "TGV_SpatialTest";
+  else
+    tablefilename << "TGV_TemporalTest_Level"
+                  << std::to_string(parameters.spatial_discretization_parameters.n_initial_global_refinements);
+  tablefilename << "_Re"
                 << parameters.Re;
 
   velocity_convergence_table.write_text(tablefilename.str() + "_Velocity");

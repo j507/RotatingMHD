@@ -1,16 +1,15 @@
 # Set the source files to be compiled
 SET(TARGET_SRC
     angular_velocity.cc
-    basic_parameters.cc
-    linear_solver_parameters.cc
     assembly_data.cc
+    basic_parameters.cc
     benchmark_data.cc
     boundary_conditions.cc
     convergence_test.cc
-    convection_diffusion.cc
     data_postprocessors.cc
     discrete_time.cc
     finite_element_field.cc    
+    linear_solver_parameters.cc
     problem_class.cc
     run_time_parameters.cc
     time_discretization.cc
@@ -31,7 +30,9 @@ SET(TARGET_SRC
     navier_stokes_projection/solve.cc
     navier_stokes_projection/timestep_update.cc
     # convection diffusion equation
-    convection_diffusion.cc
+    convection_diffusion_parameters.cc
+    convection_diffusion_problem.cc
+    convection_diffusion_solver.cc
     convection_diffusion/assemble_advection_matrix.cc
     convection_diffusion/assemble_constant_matrices.cc
     convection_diffusion/assemble_rhs.cc
