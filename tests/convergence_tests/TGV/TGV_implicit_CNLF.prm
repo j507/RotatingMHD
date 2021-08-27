@@ -1,0 +1,123 @@
+# Listing of Parameters
+# ---------------------
+set FE's polynomial degree - Pressure (Taylor-Hood) = 1
+set Mapping - Apply to interior cells               = false
+set Mapping - Polynomial degree                     = 1
+set Problem type                                    = hydrodynamic
+set Spatial dimension                               = 2
+set Verbose                                         = false
+
+
+subsection Convergence test parameters
+  set Convergence test type                 = temporal
+  set Number of spatial convergence cycles  = 2
+  set Number of temporal convergence cycles = 3
+  set Time-step reduction factor            = 0.5
+end
+
+
+subsection Dimensionless numbers
+  set Reynolds number         = 100.0
+end
+
+
+subsection Navier-Stokes solver parameters
+  set Convective term time discretization    = semi-implicit
+  set Convective term weak form              = skew-symmetric
+  set Incremental pressure-correction scheme = rotational
+  set Preconditioner update frequency        = 1
+  set Verbose                                = false
+
+
+  subsection Linear solver parameters - Correction step
+    set Absolute tolerance           = 1e-11
+    set Maximum number of iterations = 1000
+    set Relative tolerance           = 1e-10
+
+
+    subsection Preconditioner parameters
+      set Preconditioner type      = ILU
+      set Fill-in level            = 2
+      set Absolute tolerance       = 1e-5
+      set Relative tolerance       = 1.01
+      set Overlap                  = 2
+    end
+
+  end
+
+  subsection Linear solver parameters - Diffusion step
+    set Absolute tolerance           = 1e-11
+    set Maximum number of iterations = 1000
+    set Relative tolerance           = 1e-10
+
+
+    subsection Preconditioner parameters
+      set Preconditioner type      = ILU
+      set Fill-in level            = 2
+      set Absolute tolerance       = 1e-5
+      set Relative tolerance       = 1.01
+      set Overlap                  = 2
+    end
+
+  end
+
+  subsection Linear solver parameters - Poisson pre-step
+    set Absolute tolerance           = 1e-11
+    set Maximum number of iterations = 1000
+    set Relative tolerance           = 1e-10
+
+
+    subsection Preconditioner parameters
+      set Preconditioner type      = ILU
+      set Fill-in level            = 2
+      set Absolute tolerance       = 1e-5
+      set Relative tolerance       = 1.01
+      set Overlap                  = 2
+    end
+
+  end
+
+  subsection Linear solver parameters - Projection step
+    set Absolute tolerance           = 1e-11
+    set Maximum number of iterations = 1000
+    set Relative tolerance           = 1e-10
+
+
+    subsection Preconditioner parameters
+      set Preconditioner type      = ILU
+      set Fill-in level            = 2
+      set Absolute tolerance       = 1e-5
+      set Relative tolerance       = 1.01
+      set Overlap                  = 2
+    end
+
+  end
+
+end
+
+
+subsection Output control parameters
+  set Graphical output directory = TGVResults/
+  set Graphical output frequency = 10000
+  set Terminal output frequency  = 1
+end
+
+
+subsection Refinement control parameters
+  set Adaptive mesh refinement               = false
+  set Maximum number of levels               = 10
+  set Number of initial global refinements   = 5
+end
+
+
+subsection Time stepping parameters
+  set Adaptive time stepping        = false
+  set Final time                    = 1.0
+  set Initial time step             = 1e-1
+  set Maximum number of time steps  = 0
+  set Maximum time step             = 1e-1
+  set Minimum time step             = 1e-6
+  set Time stepping scheme          = CNLF
+end
+
+

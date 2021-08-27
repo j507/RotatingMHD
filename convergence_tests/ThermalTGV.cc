@@ -508,9 +508,9 @@ void ThermalTGVProblem<dim>::run()
 {
   make_grid(parameters.spatial_discretization_parameters.n_initial_global_refinements);
 
-  switch (parameters.convergence_test_parameters.test_type)
+  switch (parameters.convergence_test_parameters.type)
   {
-  case ConvergenceTest::ConvergenceTestType::spatial:
+  case ConvergenceTest::Type::spatial:
     for (unsigned int level = parameters.spatial_discretization_parameters.n_initial_global_refinements;
          level < (parameters.spatial_discretization_parameters.n_initial_global_refinements +
                   parameters.convergence_test_parameters.n_spatial_cycles);
@@ -531,7 +531,7 @@ void ThermalTGVProblem<dim>::run()
       this->triangulation.refine_global();
     }
     break;
-  case ConvergenceTest::ConvergenceTestType::temporal:
+  case ConvergenceTest::Type::temporal:
     for (unsigned int cycle = 0;
          cycle < parameters.convergence_test_parameters.n_temporal_cycles;
          ++cycle)
@@ -566,12 +566,18 @@ void ThermalTGVProblem<dim>::run()
   convergence_table.set_scientific("L2", true);
   convergence_table.set_scientific("H1", true);
   convergence_table.set_scientific("Linfty", true);
-  convergence_table.omit_column_from_convergence_rate_evaluation("cycle");
-  convergence_table.omit_column_from_convergence_rate_evaluation("cells");
-  convergence_table.omit_column_from_convergence_rate_evaluation("dofs");
-  convergence_table.omit_column_from_convergence_rate_evaluation("time_step");
-  convergence_table.evaluate_all_convergence_rates("time_step", ConvergenceTable::RateMode::reduction_rate_log2);
-
+  convergence_table.evaluate_convergence_rates("L2",
+                                               "time_step",
+                                               ConvergenceTable::RateMode::reduction_rate_log2,
+                                               1);
+  convergence_table.evaluate_convergence_rates("H1",
+                                               "time_step",
+                                               ConvergenceTable::RateMode::reduction_rate_log2,
+                                               1);
+  convergence_table.evaluate_convergence_rates("Linfty",
+                                               "time_step",
+                                               ConvergenceTable::RateMode::reduction_rate_log2,
+                                               1);
   *this->pcout << std::endl;
   if (this->pcout->is_active())
     convergence_table.write_text(this->pcout->get_stream());

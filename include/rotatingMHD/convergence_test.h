@@ -2,11 +2,8 @@
 #define INCLUDE_ROTATINGMHD_CONVERGENCE_TEST_H_
 
 #include <deal.II/base/convergence_table.h>
-#include <deal.II/base/function.h>
 #include <deal.II/base/parameter_handler.h>
-
 #include <deal.II/numerics/vector_tools.h>
-#include <rotatingMHD/finite_element_field.h>
 
 #include <fstream>
 #include <string>
@@ -14,46 +11,15 @@
 namespace RMHD
 {
 
-using namespace dealii;
-
-template <int dim>
-struct ConvergenceAnalysisData
-{
-  ConvergenceTable                convergence_table;
-
-  const std::shared_ptr<const Entities::FE_FieldBase<dim>> entity;
-
-  const Function<dim>            &exact_solution;
-
-  ConvergenceAnalysisData(const std::shared_ptr<Entities::FE_FieldBase<dim>> &entity,
-                          const Function<dim>             &exact_solution);
-
-  void update_table(const unsigned int  level,
-                    const double        time_step,
-                    const bool          flag_spatial_convergence);
-
-  /*!
-   * @brief Output of the convergence table to a stream object,
-   */
-  template<typename Stream, int dimension>
-  friend Stream& operator<<(Stream &stream,
-                            const ConvergenceAnalysisData<dimension> &data);
-
-  void write_text(std::string filename) const;
-
-};
-
-template<typename Stream, int dim>
-Stream& operator<<(Stream &stream,
-                   const ConvergenceAnalysisData<dim> &data);
-
 namespace ConvergenceTest
 {
+
+using namespace dealii;
 
 /*!
  * @brief Enumeration for convergence test type.
  */
-enum class ConvergenceTestType
+enum class Type
 {
   /*!
    * @brief Spatial convergence test.
@@ -94,18 +60,18 @@ enum class ConvergenceTestType
  * @brief @ref ConvergenceTestParameters contains parameters which are
  * related to convergence tests.
  */
-struct ConvergenceTestParameters
+struct Parameters
 {
   /*!
    * @brief Constructor which sets up the parameters with default values.
    */
-  ConvergenceTestParameters();
+  Parameters();
 
   /*!
    * @brief Constructor which sets up the parameters as specified in the
    * parameter file with the filename @p parameter_filename.
    */
-  ConvergenceTestParameters(const std::string &parameter_filename);
+  Parameters(const std::string &parameter_filename);
 
   /*!
    * @brief Static method which declares the associated parameter to the
@@ -125,18 +91,17 @@ struct ConvergenceTestParameters
    * @details This method does not add a `std::endl` to the stream at the end.
    */
   template<typename Stream>
-  friend Stream& operator<<(Stream &stream,
-                            const ConvergenceTestParameters &prm);
+  friend Stream& operator<<(Stream &, const Parameters &);
 
   /*!
    * @brief The type of convergence test (spatial or temporal).
    */
-  ConvergenceTestType test_type;
+  Type          type;
 
   /*!
    * Number of spatial convergence cycles.
    */
-  unsigned int        n_spatial_cycles;
+  unsigned int  n_spatial_cycles;
 
   /*!
    * @brief Factor \f$ s \f$ of the reduction of the timestep between two
@@ -144,12 +109,12 @@ struct ConvergenceTestParameters
    *
    * @details The factor \f$ s \f$ must be positive and less than unity.
    */
-  double              step_size_reduction_factor;
+  double        step_size_reduction_factor;
 
   /*!
    * @brief Number of temporal convergence cycles.
    */
-  unsigned int        n_temporal_cycles;
+  unsigned int  n_temporal_cycles;
 };
 
 /*!
@@ -158,22 +123,26 @@ struct ConvergenceTestParameters
  * @details This method does not add a `std::endl` to the stream at the end.
  */
 template<typename Stream>
-Stream& operator<<(Stream &stream, const ConvergenceTestParameters &prm);
+Stream& operator<<(Stream &, const Parameters &);
 
 
 /*!
- * @class ConvergenceTestData
+ * @class ConvergenceResults
  *
- * @brief @ref ConvergenceTestData is a book-keeping class for the errors of a
+ * @brief @ref ConvergenceResults is a book-keeping class for the errors of a
  * convergence test.
  *
  */
-class ConvergenceTestData
+class ConvergenceResults
 {
 
 public:
+  using NormType = VectorTools::NormType;
 
-  ConvergenceTestData(const ConvergenceTestType &type = ConvergenceTestType::temporal);
+  /*
+   * @brief Default constructor specifying the type of the convergence test.
+   */
+  ConvergenceResults(const Type type = Type::temporal);
 
   /*!
    * @brief Add errors in @p error_map to the convergence table. This variant adds
@@ -181,43 +150,50 @@ public:
    * convergence table.
    */
   template <int dim, int spacedim>
-  void update_table
-  (const DoFHandler<dim, spacedim>  &dof_handler,
-   const double           time_step,
-   const std::map<typename VectorTools::NormType, double> &error_map);
+  void update
+  (const std::map<NormType, double>  &error_map,
+   const DoFHandler<dim, spacedim>   &dof_handler,
+   const double                       time_step = std::numeric_limits<double>::lowest());
 
   /*!
    * @brief Add errors in @p error_map to the convergence table. This variant adds
-   * the number of DoFs and the cell diameter to the convergence table but not the
-   * size of the timestep.
+   * the size of the timestep and optionally the spatial discretization parameters.
    */
-  template <int dim, int spacedim>
-  void update_table
-  (const DoFHandler<dim, spacedim>  &dof_handler,
-   const std::map<typename VectorTools::NormType, double> &error_map);
+  void update
+  (const std::map<NormType, double> &error_map,
+   const double                     time_step = std::numeric_limits<double>::lowest(),
+   const types::global_dof_index    n_dofs = numbers::invalid_dof_index,
+   const types::global_cell_index   n_cells = numbers::invalid_coarse_cell_id,
+   unsigned int                     n_levels = static_cast<unsigned int>(-1),
+   const double                     h_max = std::numeric_limits<double>::max());
 
   /*!
-   * @brief Add errors in @p error_map to the convergence table. This variant adds
-   * the size of the timestep but not the number of DoFs and the cell diameter.
+   * @brief Add errors in @p error_map to the convergence table. This variant
+   * optionally adds the spatial discretization parameters and
+   * the size of the timestep.
    */
-  void update_table
-  (const double time_step,
-   const std::map<typename VectorTools::NormType, double> &error_map);
+  void update
+  (const std::map<NormType, double> &error_map,
+   const types::global_dof_index    n_dofs = numbers::invalid_dof_index,
+   const types::global_cell_index   n_cells = numbers::invalid_coarse_cell_id,
+   unsigned int                     n_levels = static_cast<unsigned int>(-1),
+   const double                     h_max = std::numeric_limits<double>::max(),
+   const double                     time_step = std::numeric_limits<double>::lowest());
+
+  Type  get_type() const;
 
   /*!
    * @brief Output of the convergence table to a stream object,
    */
   template<typename Stream>
-  friend Stream& operator<<(Stream &stream,
-                            ConvergenceTestData &data);
+  friend Stream& operator<<(Stream &, ConvergenceResults &);
 
   /*!
    * @brief Save results of convergence test to a text file using Org-mode formatting.
    */
-  bool save(const std::string &file_name);
+  void  write_text(std::ostream &file);
 
 private:
-
   /*!
    * @brief Method which formats the columns of the convergence table.
    *
@@ -233,7 +209,7 @@ private:
    * @details The column for computing the convergence rates is selected according
    * to this variable.
    */
-  const ConvergenceTestType type;
+  const Type type;
 
   /*!
    * @brief Number of rows added to the convergence table..
@@ -246,16 +222,34 @@ private:
   ConvergenceTable  table;
 
   /*!
-   * @brief Flag indicating whether the size of the timestep was specified in
+   * @brief Flag indicating whether the number of dofs was specified in
    * the last cycle.
    */
-  bool step_size_specified{false};
+  bool n_dofs_specified{false};
+
+  /*!
+   * @brief Flag indicating whether the number of cells was specified in
+   * the last cycle.
+   */
+  bool n_cells_specified{false};
+
+  /*!
+   * @brief Flag indicating whether the number of refinements was specified in
+   * the last cycle.
+   */
+  bool n_levels_specified{false};
 
   /*!
    * @brief Flag indicating whether the characteristic cell diameter was specified
    * in the last cycle.
    */
   bool h_max_specified{false};
+
+  /*!
+   * @brief Flag indicating whether the size of the timestep was specified in
+   * the last cycle.
+   */
+  bool time_step_specified{false};
 
   /*!
    * @brief Flag indicating whether the L2 error norm was specified in the last
@@ -276,6 +270,11 @@ private:
   bool Linfty_error_specified{false};
 
 };
+
+inline Type ConvergenceResults::get_type() const
+{
+  return (type);
+}
 
 }  // namespace ConvergenceTest
 

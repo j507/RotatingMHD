@@ -836,7 +836,7 @@ struct ProblemParameters
   /*!
    * @brief Parameters of the convergence test.
    */
-  ConvergenceTest::ConvergenceTestParameters  convergence_test_parameters;
+  ConvergenceTest::Parameters  convergence_test_parameters;
 
   /*!
    * @brief Parameters of the Navier-Stokes solver.

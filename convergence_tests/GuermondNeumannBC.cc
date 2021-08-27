@@ -4,19 +4,23 @@
  * @brief The .cc file replicating the numerical test of section 10.3 of the Guermond paper.
  *
  */
+#include <rotatingMHD/convergence_test.h>
+#include <rotatingMHD/finite_element_field.h>
 #include <rotatingMHD/navier_stokes_projection.h>
 #include <rotatingMHD/problem_class.h>
 #include <rotatingMHD/run_time_parameters.h>
 #include <rotatingMHD/time_discretization.h>
+#include <rotatingMHD/vector_tools.h>
 
 #include <deal.II/fe/mapping_q.h>
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/vector_tools.h>
-#include <rotatingMHD/convergence_test.h>
-#include <rotatingMHD/finite_element_field.h>
 
+#include <filesystem>
+#include <string>
+#include <sstream>
 #include <memory>
 
 namespace GuermondNeumannBC
@@ -234,9 +238,9 @@ private:
 
   EquationData::BodyForce<dim>                  body_force;
 
-  ConvergenceAnalysisData<dim>                  velocity_convergence_table;
+  ConvergenceTest::ConvergenceResults           velocity_convergence_table;
 
-  ConvergenceAnalysisData<dim>                  pressure_convergence_table;
+  ConvergenceTest::ConvergenceResults           pressure_convergence_table;
 
   double                                        cfl_number;
 
@@ -287,8 +291,8 @@ pressure_exact_solution(
   std::make_shared<EquationData::PressureExactSolution<dim>>(
     parameters.time_discretization_parameters.start_time)),
 body_force(parameters.Re, parameters.time_discretization_parameters.start_time),
-velocity_convergence_table(velocity, *velocity_exact_solution),
-pressure_convergence_table(pressure, *pressure_exact_solution),
+velocity_convergence_table(parameters.convergence_test_parameters.type),
+pressure_convergence_table(parameters.convergence_test_parameters.type),
 flag_set_exact_pressure_constant(false)
 {
   *this->pcout << parameters << std::endl << std::endl;
@@ -394,17 +398,10 @@ void GuermondNeumannProblem<dim>::postprocessing(const bool flag_point_evaluatio
   if (flag_set_exact_pressure_constant)
   {
     RMHD::LinearAlgebra::MPI::Vector  analytical_pressure(pressure->solution);
-    {
-      RMHD::LinearAlgebra::MPI::Vector tmp_analytical_pressure(pressure->distributed_vector);
-
-      VectorTools::project(pressure->get_dof_handler(),
-                          pressure->get_constraints(),
-                          QGauss<dim>(pressure->fe_degree() + 2),
-                          *pressure_exact_solution,
-                          tmp_analytical_pressure);
-
-      analytical_pressure = tmp_analytical_pressure;
-    }
+    RMHD::VectorTools::project(*this->mapping,
+                               *pressure,
+                               *pressure_exact_solution,
+                               analytical_pressure);
     {
       RMHD::LinearAlgebra::MPI::Vector distributed_analytical_pressure;
       RMHD::LinearAlgebra::MPI::Vector distributed_numerical_pressure;
@@ -555,21 +552,11 @@ void GuermondNeumannProblem<dim>::solve(const unsigned int &level)
   }
 
   Assert(time_stepping.get_current_time() == velocity_exact_solution->get_time(),
-    ExcMessage("Time mismatch between the time stepping class and the velocity function"));
+         ExcMessage("Time mismatch between the time stepping class and the velocity function"));
   Assert(time_stepping.get_current_time() == pressure_exact_solution->get_time(),
-    ExcMessage("Time mismatch between the time stepping class and the pressure function"));
+         ExcMessage("Time mismatch between the time stepping class and the pressure function"));
 
-  velocity_convergence_table.update_table(
-    level,
-    time_stepping.get_previous_step_size(),
-    parameters.convergence_test_parameters.test_type ==
-    		ConvergenceTest::ConvergenceTestType::spatial);
-  pressure_convergence_table.update_table(
-    level, time_stepping.get_previous_step_size(),
-    parameters.convergence_test_parameters.test_type ==
-    		ConvergenceTest::ConvergenceTestType::spatial);
-
-  log_file << "\n";
+  log_file << std::endl;
 
   *this->pcout << std::endl << std::endl;
 }
@@ -579,9 +566,9 @@ void GuermondNeumannProblem<dim>::run()
 {
   make_grid(parameters.spatial_discretization_parameters.n_initial_global_refinements);
 
-  switch (parameters.convergence_test_parameters.test_type)
+  switch (parameters.convergence_test_parameters.type)
   {
-  case ConvergenceTest::ConvergenceTestType::spatial:
+  case ConvergenceTest::Type::spatial:
     for (unsigned int level = parameters.spatial_discretization_parameters.n_initial_global_refinements;
          level < (parameters.spatial_discretization_parameters.n_initial_global_refinements +
                   parameters.convergence_test_parameters.n_spatial_cycles);
@@ -597,12 +584,27 @@ void GuermondNeumannProblem<dim>::run()
 
       solve(level);
 
+      {
+        auto error_map = RMHD::VectorTools::compute_error(*this->mapping,
+                                                          *velocity,
+                                                          *velocity_exact_solution);
+        velocity_convergence_table.update(error_map,
+                                          velocity->get_dof_handler());
+        error_map.clear();
+
+        error_map = RMHD::VectorTools::compute_error(*this->mapping,
+                                                     *pressure,
+                                                     *pressure_exact_solution);
+        pressure_convergence_table.update(error_map,
+                                          pressure->get_dof_handler());
+      }
+
       this->triangulation.refine_global();
 
       navier_stokes.clear();
     }
     break;
-  case ConvergenceTest::ConvergenceTestType::temporal:
+  case ConvergenceTest::Type::temporal:
     for (unsigned int cycle = 0;
          cycle < parameters.convergence_test_parameters.n_temporal_cycles;
          ++cycle)
@@ -624,6 +626,23 @@ void GuermondNeumannProblem<dim>::run()
 
       solve(parameters.spatial_discretization_parameters.n_initial_global_refinements);
 
+      {
+        auto error_map = RMHD::VectorTools::compute_error(*this->mapping,
+                                                          *velocity,
+                                                          *velocity_exact_solution);
+        velocity_convergence_table.update(error_map,
+                                          velocity->get_dof_handler(),
+                                          time_step);
+        error_map.clear();
+
+        error_map = RMHD::VectorTools::compute_error(*this->mapping,
+                                                     *pressure,
+                                                     *pressure_exact_solution);
+        pressure_convergence_table.update(error_map,
+                                          pressure->get_dof_handler(),
+                                          time_step);
+      }
+
       navier_stokes.clear();
     }
     break;
@@ -631,19 +650,105 @@ void GuermondNeumannProblem<dim>::run()
     break;
   }
 
-  *this->pcout << velocity_convergence_table;
-  *this->pcout << pressure_convergence_table;
+  if (Utilities::MPI::this_mpi_process(this->mpi_communicator) == 0)
+  {
+    if (!std::filesystem::exists(this->prm.graphical_output_directory))
+    {
+      try
+      {
+        std::filesystem::create_directories(this->prm.graphical_output_directory);
+      }
+      catch (std::exception &exc)
+      {
+        std::cerr << std::endl << std::endl
+                  << "----------------------------------------------------"
+                  << std::endl;
+        std::cerr << "Exception in the creation of the output directory: "
+                  << std::endl
+                  << exc.what() << std::endl
+                  << "Aborting!" << std::endl
+                  << "----------------------------------------------------"
+                  << std::endl;
+        std::abort();
+      }
+      catch (...)
+      {
+        std::cerr << std::endl << std::endl
+                  << "----------------------------------------------------"
+                    << std::endl;
+        std::cerr << "Unknown exception in the creation of the output directory!"
+                  << std::endl
+                  << "Aborting!" << std::endl
+                  << "----------------------------------------------------"
+                  << std::endl;
+        std::abort();
+      }
+    }
 
-  std::ostringstream tablefilename;
-  tablefilename << ((parameters.convergence_test_parameters.test_type ==
-  									 ConvergenceTest::ConvergenceTestType::spatial)
-                     ? "GuermondNeumannBC_SpatialTest"
-                     : ("GuermondNeumannBC_TemporalTest_Level" + std::to_string(parameters.spatial_discretization_parameters.n_initial_global_refinements)))
-                << "_Re"
-                << parameters.Re;
+    const std::filesystem::path path{this->prm.graphical_output_directory};
 
-  velocity_convergence_table.write_text(tablefilename.str() + "_Velocity");
-  pressure_convergence_table.write_text(tablefilename.str() + "_Pressure");
+    std::ostringstream  sstream;
+    sstream << ((velocity_convergence_table.get_type() == ConvergenceTest::Type::spatial)?
+                "SpatialConvergenceTest" : "TemporalConvergenceTest")
+            << ".txt";
+
+    std::string auxiliary_filename{"GuermondNeumannBC_Velocity_"};
+    auxiliary_filename += sstream.str();
+
+    std::filesystem::path velocity_filename = path / auxiliary_filename;
+
+    auxiliary_filename = "GuermondNeumannBC_Pressure_";
+    auxiliary_filename += sstream.str();
+
+    std::filesystem::path pressure_filename = path / auxiliary_filename;
+
+    try
+    {
+      {
+        std::ofstream fstream(velocity_filename.string());
+        velocity_convergence_table.write_text(fstream);
+      }
+      {
+        std::ofstream fstream(pressure_filename.string());
+        velocity_convergence_table.write_text(fstream);
+      }
+    }
+    catch (std::exception &exc)
+    {
+      std::cerr << std::endl << std::endl
+                << "----------------------------------------------------"
+                << std::endl;
+      std::cerr << "Exception in the creation of the output file: "
+                << std::endl
+                << exc.what() << std::endl
+                << "Aborting!" << std::endl
+                << "----------------------------------------------------"
+                << std::endl;
+      std::abort();
+    }
+    catch (...)
+    {
+      std::cerr << std::endl << std::endl
+                << "----------------------------------------------------"
+                  << std::endl;
+      std::cerr << "Unknown exception in the creation of the output file!"
+                << std::endl
+                << "Aborting!" << std::endl
+                << "----------------------------------------------------"
+                << std::endl;
+      std::abort();
+    }
+  }
+
+  *this->pcout << "Velocity convergence table" << std::endl;
+  *this->pcout << std::string(80, '=') << std::endl;
+  *this->pcout << velocity_convergence_table << std::endl;
+  *this->pcout << std::endl;
+
+  *this->pcout << "Pressure convergence table" << std::endl;
+  *this->pcout << std::string(80, '=') << std::endl;
+  *this->pcout << pressure_convergence_table << std::endl;
+  *this->pcout << std::endl;
 }
 
 } // namespace GuermondNeumannBC
@@ -655,11 +760,15 @@ int main(int argc, char *argv[])
       using namespace dealii;
       using namespace GuermondNeumannBC;
 
-      Utilities::MPI::MPI_InitFinalize mpi_initialization(
-        argc, argv, 1);
+      Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
-      RunTimeParameters::ProblemParameters parameter_set("GuermondNeumannBC.prm",
-                                                         true);
+      std::string parameter_filename;
+      if (argc >= 2)
+        parameter_filename = argv[1];
+      else
+        parameter_filename = "Guermond.prm";
+
+      RunTimeParameters::ProblemParameters parameter_set(parameter_filename, true);
 
       GuermondNeumannProblem<2> simulation(parameter_set);
 

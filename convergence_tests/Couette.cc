@@ -4,19 +4,20 @@
  * @brief The source file solving the Couette flow problem.
  *
  */
+#include <rotatingMHD/convergence_test.h>
+#include <rotatingMHD/finite_element_field.h>
 #include <rotatingMHD/navier_stokes_projection.h>
 #include <rotatingMHD/problem_class.h>
 #include <rotatingMHD/run_time_parameters.h>
 #include <rotatingMHD/time_discretization.h>
+#include <rotatingMHD/vector_tools.h>
 
 #include <deal.II/fe/mapping_q.h>
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/numerics/data_out.h>
-#include <deal.II/numerics/vector_tools.h>
-#include <rotatingMHD/convergence_test.h>
-#include <rotatingMHD/finite_element_field.h>
 
+#include <filesystem>
 #include <memory>
 
 namespace Couette
@@ -63,7 +64,7 @@ private:
   /*!
    * @brief The magnitude of the applied traction vector.
    */
-  const double t_0;
+  const double traction_magnitude;
 
   /*!
    * @brief The Reynolds number.
@@ -73,7 +74,7 @@ private:
   /*!
    * @brief The height of the channel.
    */
-  const double H;
+  const double height;
 };
 
 
@@ -85,9 +86,9 @@ VelocityExactSolution<dim>::VelocityExactSolution
  const double time)
 :
 Function<dim>(dim, time),
-t_0(t_0),
+traction_magnitude(t_0),
 Re(Re),
-H(H)
+height(H)
 {}
 
 
@@ -97,9 +98,7 @@ void VelocityExactSolution<dim>::vector_value
 (const Point<dim>  &point,
  Vector<double>    &values) const
 {
-  const double y = point(1);
-
-  values[0] = t_0 * Re * y / H;
+  values[0] = traction_magnitude * Re * point[1] / height;
   values[1] = 0.0;
 }
 
@@ -116,7 +115,7 @@ Tensor<1, dim> VelocityExactSolution<dim>::gradient
   if (component == 0)
   {
     gradient[0] = 0.0;
-    gradient[1] = t_0 * Re / H;
+    gradient[1] = traction_magnitude * Re / height;
   }
   else if (component == 1)
   {
@@ -236,17 +235,16 @@ private:
 
   NavierStokesProjection<dim>                   navier_stokes;
 
-  const double                                  t_0;
+  ConvergenceTest::ConvergenceResults           velocity_convergence_table;
 
-  std::shared_ptr<EquationData::VelocityExactSolution<dim>>
-                                                exact_solution;
+  const double  traction_magnitude;
+
+  const double  reynolds_number;
+
+  double        cfl_number;
 
   std::shared_ptr<EquationData::TractionVector<dim>>
                                                 traction_vector;
-
-  ConvergenceAnalysisData<dim>                  convergence_table;
-
-  double                                        cfl_number;
 
   void make_grid(const unsigned int &n_global_refinements);
 
@@ -262,7 +260,7 @@ private:
 
   void update_entities();
 
-  void solve(const unsigned int &level);
+  void solve(const unsigned int level);
 };
 
 template <int dim>
@@ -271,11 +269,11 @@ CouetteFlowProblem<dim>::CouetteFlowProblem(const RunTimeParameters::ProblemPara
 Problem<dim>(parameters),
 parameters(parameters),
 velocity(std::make_shared<Entities::FE_VectorField<dim>>(parameters.fe_degree_velocity,
-                                                       this->triangulation,
-                                                       "Velocity")),
+                                                         this->triangulation,
+                                                         "Velocity")),
 pressure(std::make_shared<Entities::FE_ScalarField<dim>>(parameters.fe_degree_pressure,
-                                                       this->triangulation,
-                                                       "Pressure")),
+                                                         this->triangulation,
+                                                         "Pressure")),
 time_stepping(parameters.time_discretization_parameters),
 navier_stokes(parameters.navier_stokes_parameters,
               time_stepping,
@@ -284,15 +282,11 @@ navier_stokes(parameters.navier_stokes_parameters,
               this->mapping,
               this->pcout,
               this->computing_timer),
-t_0(1.0),
-exact_solution(
-  std::make_shared<EquationData::VelocityExactSolution<dim>>(
-    t_0,
-    parameters.Re,
-    1.0)),
-traction_vector(
-  std::make_shared<EquationData::TractionVector<dim>>(t_0)),
-convergence_table(velocity, *exact_solution)
+velocity_convergence_table(parameters.convergence_test_parameters.type),
+traction_magnitude(1.0),
+reynolds_number(parameters.Re),
+cfl_number(0.0),
+traction_vector(std::make_shared<EquationData::TractionVector<dim>>(traction_magnitude))
 {
   // The Couette flow is a 2-dimensional problem.
   AssertDimension(dim, 2);
@@ -460,7 +454,7 @@ void CouetteFlowProblem<dim>::update_entities()
 }
 
 template <int dim>
-void CouetteFlowProblem<dim>::solve(const unsigned int &level)
+void CouetteFlowProblem<dim>::solve(const unsigned int /* level */)
 {
   setup_dofs();
   setup_constraints();
@@ -482,7 +476,7 @@ void CouetteFlowProblem<dim>::solve(const unsigned int &level)
     time_stepping.update_coefficients();
 
     // Updates the functions and the constraints to t^{k}
-    exact_solution->set_time(time_stepping.get_next_time());
+
 
     // Solves the system, i.e. computes the fields at t^{k}
     navier_stokes.solve();
@@ -506,14 +500,6 @@ void CouetteFlowProblem<dim>::solve(const unsigned int &level)
       output();
   }
 
-  Assert(time_stepping.get_current_time() == exact_solution->get_time(),
-    ExcMessage("Time mismatch between the time stepping class and the pressure function"));
-
-  convergence_table.update_table(
-    level, time_stepping.get_previous_step_size(),
-    parameters.convergence_test_parameters.test_type ==
-    		ConvergenceTest::ConvergenceTestType::spatial);
-
   *this->pcout << std::endl << std::endl;
 }
 
@@ -526,9 +512,9 @@ void CouetteFlowProblem<dim>::run()
   // The following if allows to perform either spatial or temporal
   // convergence tests, depending on the settings described in the
   // parameter file.
-  switch (parameters.convergence_test_parameters.test_type)
+  switch (parameters.convergence_test_parameters.type)
   {
-  case ConvergenceTest::ConvergenceTestType::spatial:
+  case ConvergenceTest::Type::spatial:
     for (unsigned int level = parameters.spatial_discretization_parameters.n_initial_global_refinements;
          level < (parameters.spatial_discretization_parameters.n_initial_global_refinements +
                   parameters.convergence_test_parameters.n_spatial_cycles);
@@ -544,12 +530,22 @@ void CouetteFlowProblem<dim>::run()
 
       solve(level);
 
+      {
+        EquationData::VelocityExactSolution<dim>  exact_solution(traction_magnitude,
+                                                                 reynolds_number);
+        const auto error_map = RMHD::VectorTools::compute_error(*this->mapping,
+                                                                *velocity,
+                                                                exact_solution);
+        velocity_convergence_table.update(error_map,
+                                          velocity->get_dof_handler());
+      }
+
       this->triangulation.refine_global();
 
       navier_stokes.clear();
     }
     break;
-  case ConvergenceTest::ConvergenceTestType::temporal:
+  case ConvergenceTest::Type::temporal:
     for (unsigned int cycle = 0;
          cycle < parameters.convergence_test_parameters.n_temporal_cycles;
          ++cycle)
@@ -571,6 +567,17 @@ void CouetteFlowProblem<dim>::run()
 
       solve(parameters.spatial_discretization_parameters.n_initial_global_refinements);
 
+      {
+        EquationData::VelocityExactSolution<dim>  exact_solution(traction_magnitude,
+                                                                 reynolds_number);
+        const auto error_map = RMHD::VectorTools::compute_error(*this->mapping,
+                                                                *velocity,
+                                                                exact_solution);
+        velocity_convergence_table.update(error_map,
+                                          velocity->get_dof_handler(),
+                                          time_step);
+      }
+
       navier_stokes.clear();
     }
     break;
@@ -578,17 +585,88 @@ void CouetteFlowProblem<dim>::run()
     break;
   }
 
-  *(this->pcout) << convergence_table;
+  if (Utilities::MPI::this_mpi_process(this->mpi_communicator) == 0)
+  {
+    if (!std::filesystem::exists(this->prm.graphical_output_directory))
+    {
+      try
+      {
+        std::filesystem::create_directories(this->prm.graphical_output_directory);
+      }
+      catch (std::exception &exc)
+      {
+        std::cerr << std::endl << std::endl
+                  << "----------------------------------------------------"
+                  << std::endl;
+        std::cerr << "Exception in the creation of the output directory: "
+                  << std::endl
+                  << exc.what() << std::endl
+                  << "Aborting!" << std::endl
+                  << "----------------------------------------------------"
+                  << std::endl;
+        std::abort();
+      }
+      catch (...)
+      {
+        std::cerr << std::endl << std::endl
+                  << "----------------------------------------------------"
+                    << std::endl;
+        std::cerr << "Unknown exception in the creation of the output directory!"
+                  << std::endl
+                  << "Aborting!" << std::endl
+                  << "----------------------------------------------------"
+                  << std::endl;
+        std::abort();
+      }
+    }
 
-  std::ostringstream tablefilename;
-  tablefilename << ((parameters.convergence_test_parameters.test_type ==
-                      ConvergenceTest::ConvergenceTestType::spatial)
-                     ? "Couette_SpatialTest"
-                     : ("Couette_TemporalTest_Level" + std::to_string(parameters.spatial_discretization_parameters.n_initial_global_refinements)))
-                << "_Re"
-                << parameters.Re;
+    const std::filesystem::path path{this->prm.graphical_output_directory};
 
-  convergence_table.write_text(tablefilename.str() + "_Velocity");
+    std::ostringstream  sstream;
+    sstream << ((velocity_convergence_table.get_type() == ConvergenceTest::Type::spatial)?
+                "Couette_SpatialConvergenceTest" : "Couette_TemporalConvergenceTest")
+            << "_Re_"
+            << Utilities::to_string(reynolds_number)
+            << ".txt";
+
+    std::filesystem::path filename = path / sstream.str();
+
+    try
+    {
+      std::ofstream fstream(filename.string());
+      velocity_convergence_table.write_text(fstream);
+    }
+    catch (std::exception &exc)
+    {
+      std::cerr << std::endl << std::endl
+                << "----------------------------------------------------"
+                << std::endl;
+      std::cerr << "Exception in the creation of the output file: "
+                << std::endl
+                << exc.what() << std::endl
+                << "Aborting!" << std::endl
+                << "----------------------------------------------------"
+                << std::endl;
+      std::abort();
+    }
+    catch (...)
+    {
+      std::cerr << std::endl << std::endl
+                << "----------------------------------------------------"
+                  << std::endl;
+      std::cerr << "Unknown exception in the creation of the output file!"
+                << std::endl
+                << "Aborting!" << std::endl
+                << "----------------------------------------------------"
+                << std::endl;
+      std::abort();
+    }
+  }
+
+  *this->pcout << "Velocity convergence table" << std::endl;
+  *this->pcout << std::string(80, '=') << std::endl;
+  *this->pcout << velocity_convergence_table << std::endl;
+
 }
 
 } // namespace Couette
@@ -602,8 +680,13 @@ int main(int argc, char *argv[])
 
     Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
 
-    RunTimeParameters::ProblemParameters parameter_set("Couette.prm",
-                                                       true);
+    std::string parameter_filename;
+    if (argc >= 2)
+      parameter_filename = argv[1];
+    else
+      parameter_filename = "Guermond.prm";
+
+    RunTimeParameters::ProblemParameters parameter_set(parameter_filename, true);
 
     CouetteFlowProblem<2> simulation(parameter_set);
 

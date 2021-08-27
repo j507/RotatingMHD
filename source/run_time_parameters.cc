@@ -1504,7 +1504,7 @@ void ProblemParameters::declare_parameters(ParameterHandler &prm)
 
   DimensionlessNumbers::declare_parameters(prm);
 
-  ConvergenceTest::ConvergenceTestParameters::declare_parameters(prm);
+  ConvergenceTest::Parameters::declare_parameters(prm);
 
   NavierStokesParameters::declare_parameters(prm);
 

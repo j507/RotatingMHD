@@ -84,9 +84,11 @@ CTestTestfile.cmake
 _deps
 /build/
 tests/applications/*/*.debug/
+tests/convergence_tests/*/*.debug/
 tests/rotatingMHD/*.debug/
 tests/rotatingMHD/*/*.debug/
 tests/applications/*/*.release/
+tests/convergence_tests/*/*.release/
 tests/rotatingMHD/*.release/
 tests/rotatingMHD/*/*.release/
 

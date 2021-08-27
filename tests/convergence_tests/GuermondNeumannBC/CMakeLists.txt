@@ -1,0 +1,2 @@
+SET(TEST_TARGET GuermondNeumannBC)
+DEAL_II_PICKUP_TESTS()
