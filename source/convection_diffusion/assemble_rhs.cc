@@ -8,6 +8,187 @@
 namespace RMHD
 {
 
+namespace
+{
+
+
+template <int dim>
+void compute_source_term
+(Function<dim>* const  ptr,
+ const std::vector<Point<dim>> &quadrature_points,
+ const std::vector<double>     &gamma,
+ const double                   previous_time,
+ const double                   current_time,
+ const double                   next_time,
+ std::vector<double>           &source_term)
+{
+  AssertDimension(source_term.size(), quadrature_points.size());
+
+  std::vector<double> old_old_source_term_values(quadrature_points.size());
+  ptr->set_time(previous_time);
+  ptr->value_list(quadrature_points,
+                  old_old_source_term_values);
+
+  std::vector<double> old_source_term_values(quadrature_points.size());
+  ptr->set_time(current_time);
+  ptr->value_list(quadrature_points,
+                  old_source_term_values);
+
+  std::vector<double> source_term_values(quadrature_points.size());
+  ptr->set_time(next_time);
+  ptr->value_list(quadrature_points,
+                  source_term_values);
+
+  // Loop over quadrature points
+  for (std::size_t q=0; q<quadrature_points.size(); ++q)
+    source_term[q] =
+      (gamma[0] * source_term_values[q] +
+       gamma[1] * old_source_term_values[q] +
+       gamma[2] * old_old_source_term_values[q]);
+}
+
+
+
+
+template <int dim>
+void compute_advection_term
+(TensorFunction<1, dim>* const  ptr,
+ const std::vector<Tensor<1,dim>> &old_temperature_gradients,
+ const std::vector<Tensor<1,dim>> &old_old_temperature_gradients,
+ const std::vector<Point<dim>> &quadrature_points,
+ const std::vector<double>     &beta,
+ const double                   previous_time,
+ const double                   current_time,
+ std::vector<double>           &advection_term)
+{
+  AssertDimension(advection_term.size(), quadrature_points.size());
+  AssertDimension(old_temperature_gradients.size(), quadrature_points.size());
+  AssertDimension(old_old_temperature_gradients.size(), quadrature_points.size());
+
+  std::vector<Tensor<1,dim>> old_old_velocity_values(quadrature_points.size());
+  ptr->set_time(previous_time);
+  ptr->value_list(quadrature_points,
+                  old_old_velocity_values);
+
+  std::vector<Tensor<1,dim>> old_velocity_values(quadrature_points.size());
+  ptr->set_time(current_time);
+  ptr->value_list(quadrature_points,
+                  old_velocity_values);
+
+  for (std::size_t q=0; q<quadrature_points.size(); ++q)
+    advection_term[q] =
+      beta[0] * old_velocity_values[q] * old_temperature_gradients[q] +
+      beta[1] * old_old_velocity_values[q] * old_old_temperature_gradients[q];
+}
+
+template <int dim>
+void compute_advection_term
+(const Entities::FE_VectorField<dim> &velocity,
+ const typename DoFHandler<dim>::active_cell_iterator &cell,
+ const std::vector<Tensor<1,dim>>    &old_temperature_gradients,
+ const std::vector<Tensor<1,dim>>    &old_old_temperature_gradients,
+ const std::vector<double>           &beta,
+ FEValues<dim>                       &fe_values,
+ std::vector<double>                 &advection_term)
+{
+  AssertDimension(old_temperature_gradients.size(), advection_term.size());
+  AssertDimension(old_old_temperature_gradients.size(), advection_term.size());
+
+  typename DoFHandler<dim>::active_cell_iterator
+  velocity_cell(&velocity.get_triangulation(),
+                cell->level(),
+                cell->index(),
+                &velocity.get_dof_handler());
+
+  fe_values.reinit(velocity_cell);
+
+  const FEValuesExtractors::Vector  vector_extractor(0);
+  std::vector<Tensor<1,dim>>  old_velocity_values(advection_term.size());
+  fe_values[vector_extractor].get_function_values(velocity.old_solution,
+                                                  old_velocity_values);
+
+  std::vector<Tensor<1,dim>>  old_old_velocity_values(advection_term.size());
+  fe_values[vector_extractor].get_function_values(velocity.old_old_solution,
+                                                  old_old_velocity_values);
+  // Loop over quadrature points
+  for (std::size_t q=0; q<advection_term.size(); ++q)
+    advection_term[q] =
+        beta[0] * old_velocity_values[q] * old_temperature_gradients[q] +
+        beta[1] * old_old_velocity_values[q] * old_old_temperature_gradients[q];
+}
+
+
+template <int dim>
+void compute_advection_matrix_for_bc
+(const Entities::FE_VectorField<dim> &velocity,
+ const typename DoFHandler<dim>::active_cell_iterator &cell,
+ const std::vector<double>         &phi,
+ const std::vector<Tensor<1,dim>>  &grad_phi,
+ const std::vector<double>         &eta,
+ const double                       JxW_value,
+ const unsigned int                 q,
+ const unsigned int                 i,
+ FEValues<dim>                     &fe_values,
+ FullMatrix<double>                &local_matrix)
+{
+  AssertDimension(phi.size(), local_matrix.m());
+  AssertDimension(grad_phi.size(), local_matrix.m());
+
+  typename DoFHandler<dim>::active_cell_iterator
+  velocity_cell(&velocity.get_triangulation(),
+                cell->level(),
+                cell->index(),
+                &velocity.get_dof_handler());
+
+  fe_values.reinit(velocity_cell);
+
+  const FEValuesExtractors::Vector  vector_extractor(0);
+
+  std::vector<Tensor<1,dim>>  old_velocity_values(fe_values.get_quadrature().size());
+  fe_values[vector_extractor].get_function_values(velocity.old_solution,
+                                                  old_velocity_values);
+
+  std::vector<Tensor<1,dim>>  old_old_velocity_values(fe_values.get_quadrature().size());
+  fe_values[vector_extractor].get_function_values(velocity.old_old_solution,
+                                                  old_old_velocity_values);
+
+  const Tensor<1,dim> extrapolated_velocity =
+      eta[0] * old_velocity_values[q] + eta[1] * old_old_velocity_values[q];
+
+  for (std::size_t j=0; j<phi.size(); ++j)
+    local_matrix(j,i) += phi[j] * (extrapolated_velocity * grad_phi[i]) * JxW_value;
+}
+
+template <int dim>
+void compute_advection_matrix_for_bc
+(TensorFunction<1, dim>* const      ptr,
+ const std::vector<double>         &phi,
+ const std::vector<Tensor<1,dim>>  &grad_phi,
+ const std::vector<double>         &eta,
+ const Point<dim>                  &quadrature_point,
+ const double                       previous_time,
+ const double                       current_time,
+ const double                       JxW_value,
+ const unsigned int                 i,
+ FullMatrix<double>                &local_matrix)
+{
+  AssertDimension(phi.size(), local_matrix.m());
+  AssertDimension(grad_phi.size(), local_matrix.m());
+
+  ptr->set_time(previous_time);
+  Tensor<1, dim> extrapolated_velocity = ptr->value(quadrature_point);
+  extrapolated_velocity *= eta[0];
+
+  ptr->set_time(current_time);
+  extrapolated_velocity += (eta[1] * ptr->value(quadrature_point));
+
+  for (std::size_t j=0; j<local_matrix.m(); ++j)
+    local_matrix(j,i) += phi[j] * (extrapolated_velocity * grad_phi[i]) * JxW_value;
+}
+
+} // namespace
+
+
 using Copy = AssemblyData::HeatEquation::RightHandSide::Copy;
 
 template <int dim>
@@ -123,7 +304,7 @@ void ConvectionDiffusionSolver<dim>::assemble_local_rhs
   // Initialize weak forms of the right-hand side's terms
   std::vector<double>         explicit_temperature_term(scratch.n_q_points);
   std::vector<Tensor<1,dim>>  diffusion_term(scratch.n_q_points);
-  std::vector<double>         heat_source_term(scratch.n_q_points);
+  std::vector<double>         source_term(scratch.n_q_points);
   std::vector<double>         advection_term(scratch.n_q_points);
 
   // Temperature
@@ -145,91 +326,37 @@ void ConvectionDiffusionSolver<dim>::assemble_local_rhs
     temperature->old_old_solution,
     scratch.old_old_temperature_gradients);
 
-  // Heat source
+  // Source term
   if (source_term_ptr != nullptr)
+    compute_source_term(source_term_ptr,
+                        scratch.temperature_fe_values.get_quadrature_points(),
+                        gamma,
+                        time_stepping.get_previous_time(),
+                        time_stepping.get_current_time(),
+                        time_stepping.get_next_time(),
+                        source_term);
+
+  // Advection term
+  if (parameters.convective_term_time_discretization ==
+      RunTimeParameters::ConvectiveTermTimeDiscretization::fully_explicit)
   {
-    source_term_ptr->set_time(time_stepping.get_previous_time());
-    source_term_ptr->value_list(
-      scratch.temperature_fe_values.get_quadrature_points(),
-      scratch.old_old_source_term_values);
-
-    source_term_ptr->set_time(time_stepping.get_current_time());
-    source_term_ptr->value_list(
-      scratch.temperature_fe_values.get_quadrature_points(),
-      scratch.old_source_term_values);
-
-    source_term_ptr->set_time(time_stepping.get_next_time());
-    source_term_ptr->value_list(
-      scratch.temperature_fe_values.get_quadrature_points(),
-      scratch.source_term_values);
-
-    // Loop over quadrature points
-    for (unsigned int q = 0; q < scratch.n_q_points; ++q)
-      heat_source_term[q] =
-        1.0 * /* parameters.C7 */
-        (gamma[0] *
-         scratch.source_term_values[q]
-         +
-         gamma[1] *
-         scratch.old_source_term_values[q]
-         +
-         gamma[2] *
-         scratch.old_old_source_term_values[q]);
-  }
-
-  // Advection
-  if (velocity != nullptr)
-  {
-    typename DoFHandler<dim>::active_cell_iterator
-      velocity_cell(&temperature->get_triangulation(),
-                    cell->level(),
-                    cell->index(),
-                    // Pointer to the velocity's DoFHandler
-                    &velocity->get_dof_handler());
-
-    scratch.velocity_fe_values.reinit(velocity_cell);
-
-    const FEValuesExtractors::Vector  vector_extractor(0);
-
-    scratch.velocity_fe_values[vector_extractor].get_function_values(
-      velocity->old_solution,
-      scratch.old_velocity_values);
-
-    scratch.velocity_fe_values[vector_extractor].get_function_values(
-      velocity->old_old_solution,
-      scratch.old_old_velocity_values);
-
-    if (parameters.convective_term_time_discretization ==
-            RunTimeParameters::ConvectiveTermTimeDiscretization::fully_explicit &&
-          (velocity != nullptr || velocity_function_ptr != nullptr))
-      for (unsigned int q = 0; q < scratch.n_q_points; ++q)
-        advection_term[q] =
-          beta[0] *
-          scratch.old_velocity_values[q] *
-          scratch.old_temperature_gradients[q]
-          +
-          beta[1] *
-          scratch.old_old_velocity_values[q] *
-          scratch.old_old_temperature_gradients[q];
-  }
-  else if (velocity_function_ptr != nullptr)
-  {
-    velocity_function_ptr->value_list(
-      scratch.temperature_fe_values.get_quadrature_points(),
-      scratch.velocity_values);
-
-    if (parameters.convective_term_time_discretization ==
-          RunTimeParameters::ConvectiveTermTimeDiscretization::fully_explicit &&
-            (velocity != nullptr || velocity_function_ptr != nullptr))
-      for (unsigned int q = 0; q < scratch.n_q_points; ++q)
-        advection_term[q] =
-          beta[0] *
-          scratch.velocity_values[q] *
-          scratch.old_temperature_gradients[q]
-          +
-          beta[1] *
-          scratch.velocity_values[q] *
-          scratch.old_old_temperature_gradients[q];
+    if (velocity != nullptr && velocity_function_ptr == nullptr)
+      compute_advection_term(*velocity,
+                             cell,
+                             scratch.old_temperature_gradients,
+                             scratch.old_old_temperature_gradients,
+                             beta,
+                             scratch.velocity_fe_values,
+                             advection_term);
+    else if (velocity_function_ptr != nullptr && velocity == nullptr)
+      compute_advection_term(velocity_function_ptr.get(),
+                             scratch.old_temperature_gradients,
+                             scratch.old_old_temperature_gradients,
+                             scratch.temperature_fe_values.get_quadrature_points(),
+                             beta,
+                             time_stepping.get_previous_time(),
+                             time_stepping.get_current_time(),
+                             advection_term);
   }
 
   // Loop over quadrature points
@@ -263,51 +390,55 @@ void ConvectionDiffusionSolver<dim>::assemble_local_rhs
     for (unsigned int i = 0; i < scratch.dofs_per_cell; ++i)
     {
       // Local right hand side (Domain integrals)
-      data.local_rhs(i) -=
-          (scratch.grad_phi[i] *
-           diffusion_term[q]
-           -
-           scratch.phi[i] *
-           (heat_source_term[q]
-            -
-            explicit_temperature_term[q]
-            -
-            advection_term[q])) *
-          scratch.temperature_fe_values.JxW(q);
+      data.local_rhs(i) +=
+          (-diffusion_term[q] * scratch.grad_phi[i] +
+           (source_term[q] - explicit_temperature_term[q] - advection_term[q]
+           ) * scratch.phi[i]
+          ) * scratch.temperature_fe_values.JxW(q);
 
       // Loop over the i-th column's rows of the local matrix
       // for the case of inhomogeneous Dirichlet boundary conditions
       if (temperature->get_constraints().is_inhomogeneously_constrained(
             data.local_dof_indices[i]))
+      {
         for (unsigned int j = 0; j < scratch.dofs_per_cell; ++j)
         {
           data.local_matrix_for_inhomogeneous_bc(j,i) +=
-              (alpha[0] /
-               time_stepping.get_next_step_size() *
-               scratch.phi[j] *
-               scratch.phi[i]
-               +
-               gamma[0] *
-               parameters.C4 *
-               scratch.grad_phi[j] *
-               scratch.grad_phi[i]) *
-              scratch.temperature_fe_values.JxW(q);
-
-          if (parameters.convective_term_time_discretization ==
-                RunTimeParameters::ConvectiveTermTimeDiscretization::semi_implicit &&
-              (velocity != nullptr || velocity_function_ptr != nullptr))
-            data.local_matrix_for_inhomogeneous_bc(j,i) +=
-              (scratch.phi[j] * (
-                 (velocity != nullptr)
-                 ? (eta[0] *
-                    scratch.old_velocity_values[q]
-                    +
-                    eta[1] *
-                    scratch.old_old_velocity_values[q])
-                 : scratch.velocity_values[q]) *
-               scratch.grad_phi[i]) *
+              (alpha[0] / time_stepping.get_next_step_size() *
+               scratch.phi[j] * scratch.phi[i] +
+               gamma[0] * parameters.C4 *
+               scratch.grad_phi[j] * scratch.grad_phi[i]) *
               scratch.temperature_fe_values.JxW(q);
         } // Loop over the i-th column's rows of the local matrix
+
+        if (parameters.convective_term_time_discretization ==
+            RunTimeParameters::ConvectiveTermTimeDiscretization::semi_implicit)
+        {
+          if (velocity != nullptr && velocity_function_ptr == nullptr)
+            compute_advection_matrix_for_bc(*velocity,
+                                            cell,
+                                            scratch.phi,
+                                            scratch.grad_phi,
+                                            eta,
+                                            scratch.temperature_fe_values.JxW(q),
+                                            q,
+                                            i,
+                                            scratch.velocity_fe_values,
+                                            data.local_matrix_for_inhomogeneous_bc);
+          else if (velocity_function_ptr != nullptr && velocity == nullptr)
+            compute_advection_matrix_for_bc(velocity_function_ptr.get(),
+                                            scratch.phi,
+                                            scratch.grad_phi,
+                                            eta,
+                                            scratch.temperature_fe_values.quadrature_point(q),
+                                            time_stepping.get_previous_time(),
+                                            time_stepping.get_current_time(),
+                                            scratch.temperature_fe_values.JxW(q),
+                                            i,
+                                            data.local_matrix_for_inhomogeneous_bc);
+
+        }
+      }
     } // Loop over local degrees of freedom
   } // Loop over quadrature points
 

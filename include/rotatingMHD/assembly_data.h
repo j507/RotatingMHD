@@ -237,29 +237,9 @@ struct Scratch : ScratchBase<dim>
 
   std::vector<Tensor<2,dim>>  old_old_velocity_gradients;
 
-  std::vector<double>         old_velocity_divergences;
-
-  std::vector<double>         old_old_velocity_divergences;
-
-  std::vector<curl_type>      old_velocity_curls;
-
-  std::vector<curl_type>      old_old_velocity_curls;
-
-  curl_type                   old_angular_velocity_value;
-
-  curl_type                   old_old_angular_velocity_value;
-
   std::vector<double>         old_temperature_values;
 
   std::vector<double>         old_old_temperature_values;
-
-  std::vector<Tensor<1,dim>>  gravity_vector_values;
-
-  std::vector<Tensor<1,dim>>  body_force_values;
-
-  std::vector<Tensor<1,dim>>  old_body_force_values;
-
-  std::vector<Tensor<1,dim>>  old_old_body_force_values;
 
   std::vector<Tensor<1,dim>>  neumann_bc_values;
 
@@ -272,8 +252,6 @@ struct Scratch : ScratchBase<dim>
   std::vector<Tensor<2,dim>>  grad_phi;
 
   std::vector<double>         div_phi;
-
-  std::vector<curl_type>      curl_phi;
 
   std::vector<Tensor<1,dim>>  face_phi;
 };
@@ -464,21 +442,9 @@ struct Scratch : ScratchBase<dim>
 
   std::vector<double>         old_old_temperature_values;
 
-  std::vector<Tensor<1,dim>>  velocity_values;
-
-  std::vector<Tensor<1,dim>>  old_velocity_values;
-
-  std::vector<Tensor<1,dim>>  old_old_velocity_values;
-
   std::vector<Tensor<1,dim>>  old_temperature_gradients;
 
   std::vector<Tensor<1,dim>>  old_old_temperature_gradients;
-
-  std::vector<double>         source_term_values;
-
-  std::vector<double>         old_source_term_values;
-
-  std::vector<double>         old_old_source_term_values;
 
   std::vector<double>         neumann_bc_values;
 
