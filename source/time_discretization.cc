@@ -498,7 +498,9 @@ void VSIMEXMethod::set_desired_next_step_size(const double time_step_size)
 
 void VSIMEXMethod::update_coefficients()
 {
-  // Computes the ration of the next and previous time step sizes.
+  const float old_omega{(float)omega};
+
+  // Compute the ratio of the next and previous time step sizes.
   // It is nested in an if as get_previous_step_size() returns zero
   // at the start time.
   if (get_step_number() > 0)
@@ -510,7 +512,7 @@ void VSIMEXMethod::update_coefficients()
   // Checks if the time step size changes. If not, exit the method.
   // The second boolean, i.e. get_step_number() <= (get_order() - 1),
   // takes the first step into account.
-  if ((float)omega != 1. || get_step_number() <= (get_order() - 1))
+  if ((float)omega != old_omega || get_step_number() <= (get_order() - 1))
     flag_coefficients_changed = true;
   else
   {

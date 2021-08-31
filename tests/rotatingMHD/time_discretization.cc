@@ -6,13 +6,14 @@
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/archive/text_iarchive.hpp>
 
-void test()
+void test(RMHD::TimeDiscretization::VSIMEXScheme scheme)
 {
   std::stringstream ss;
 
   using namespace RMHD::TimeDiscretization;
 
   TimeDiscretizationParameters  parameters;
+  parameters.vsimex_scheme = scheme;
   parameters.minimum_time_step = 0.01;
   parameters.maximum_time_step = 1.0;
   parameters.initial_time_step = 0.1;
@@ -58,7 +59,6 @@ void test()
         timestepping.print_coefficients(std::cout, "    ");
 
       timestepping.advance_time();
-      std::cout << timestepping << std::endl;
     }
     std::cout << timestepping << std::endl;
   }
@@ -71,8 +71,10 @@ int main(void)
 {
   try
   {
-    test();
-
+    test(RMHD::TimeDiscretization::VSIMEXScheme::BDF2);
+    test(RMHD::TimeDiscretization::VSIMEXScheme::CNAB);
+    test(RMHD::TimeDiscretization::VSIMEXScheme::mCNAB);
+    test(RMHD::TimeDiscretization::VSIMEXScheme::CNLF);
   }
   catch(std::exception & exc)
   {
