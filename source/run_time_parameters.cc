@@ -509,6 +509,222 @@ Stream& operator<<(Stream &stream, const DimensionlessNumbers &prm)
 
 
 
+ProjectionSolverParametersBase::ProjectionSolverParametersBase()
+:
+convective_term_weak_form(ConvectiveTermWeakForm::skewsymmetric),
+convective_term_time_discretization(ConvectiveTermTimeDiscretization::semi_implicit),
+diffusion_step_solver_parameters("Diffusion step"),
+projection_step_solver_parameters("Projection step"),
+correction_step_solver_parameters("Correction step"),
+zeroth_step_solver_parameters("Zeroth step"),
+preconditioner_update_frequency(10),
+verbose(false)
+{}
+
+
+
+ProjectionSolverParametersBase::ProjectionSolverParametersBase
+(const std::string &parameter_filename)
+:
+ProjectionSolverParametersBase()
+{
+  ParameterHandler prm;
+  declare_parameters(prm);
+
+  std::ifstream parameter_file(parameter_filename.c_str());
+
+  if (!parameter_file)
+  {
+    parameter_file.close();
+
+    std::ostringstream message;
+    message << "Input parameter file <"
+            << parameter_filename << "> not found. Creating a"
+            << std::endl
+            << "template file of the same name."
+            << std::endl;
+
+    std::ofstream parameter_out(parameter_filename.c_str());
+    prm.print_parameters(parameter_out,
+                         ParameterHandler::OutputStyle::Text);
+
+    AssertThrow(false, ExcMessage(message.str().c_str()));
+  }
+
+  prm.parse_input(parameter_file);
+
+  parse_parameters(prm);
+}
+
+
+
+void ProjectionSolverParametersBase::declare_parameters(ParameterHandler &prm)
+{
+  prm.declare_entry("Convective term weak form",
+                    "skew-symmetric",
+                    Patterns::Selection("standard|skew-symmetric|divergence|rotational"));
+
+  prm.declare_entry("Convective term time discretization",
+                    "semi-implicit",
+                    Patterns::Selection("semi-implicit|explicit"));
+
+  prm.declare_entry("Preconditioner update frequency",
+                    "10",
+                    Patterns::Integer(1));
+
+  prm.declare_entry("Verbose",
+                    "false",
+                    Patterns::Bool());
+
+  prm.enter_subsection("Linear solver parameters - Diffusion step");
+  {
+    LinearSolverParameters::declare_parameters(prm);
+  }
+  prm.leave_subsection();
+
+  prm.enter_subsection("Linear solver parameters - Projection step");
+  {
+    LinearSolverParameters::declare_parameters(prm);
+  }
+  prm.leave_subsection();
+
+  prm.enter_subsection("Linear solver parameters - Correction step");
+  {
+    LinearSolverParameters::declare_parameters(prm);
+  }
+  prm.leave_subsection();
+
+  prm.enter_subsection("Linear solver parameters - Zeroth step");
+  {
+    LinearSolverParameters::declare_parameters(prm);
+  }
+  prm.leave_subsection();
+}
+
+
+
+void ProjectionSolverParametersBase::parse_parameters(ParameterHandler &prm)
+{
+  const std::string str_convective_term_weak_form(prm.get("Convective term weak form"));
+
+  if (str_convective_term_weak_form == std::string("standard"))
+    convective_term_weak_form = ConvectiveTermWeakForm::standard;
+  else if (str_convective_term_weak_form == std::string("skew-symmetric"))
+    convective_term_weak_form = ConvectiveTermWeakForm::skewsymmetric;
+  else if (str_convective_term_weak_form == std::string("divergence"))
+    convective_term_weak_form = ConvectiveTermWeakForm::divergence;
+  else if (str_convective_term_weak_form == std::string("rotational"))
+    convective_term_weak_form = ConvectiveTermWeakForm::rotational;
+  else
+    AssertThrow(false,
+                ExcMessage("Unexpected identifier for the weak form "
+                            "of the convective term."));
+
+  const std::string str_convective_term_time_discretization(prm.get("Convective term time discretization"));
+
+  if (str_convective_term_time_discretization == std::string("semi-implicit"))
+    convective_term_time_discretization = ConvectiveTermTimeDiscretization::semi_implicit;
+  else if (str_convective_term_time_discretization == std::string("explicit"))
+    convective_term_time_discretization = ConvectiveTermTimeDiscretization::fully_explicit;
+  else
+    AssertThrow(false,
+                ExcMessage("Unexpected identifier for the time discretization "
+                            "of the convective term."));
+
+  preconditioner_update_frequency = prm.get_integer("Preconditioner update frequency");
+  AssertThrow(preconditioner_update_frequency > 0,
+          ExcLowerRange(preconditioner_update_frequency, 0));
+
+  verbose = prm.get_bool("Verbose");
+
+  prm.enter_subsection("Linear solver parameters - Diffusion step");
+  {
+    diffusion_step_solver_parameters.parse_parameters(prm);
+  }
+  prm.leave_subsection();
+
+  prm.enter_subsection("Linear solver parameters - Projection step");
+  {
+    projection_step_solver_parameters.parse_parameters(prm);
+  }
+  prm.leave_subsection();
+
+  prm.enter_subsection("Linear solver parameters - Correction step");
+  {
+    correction_step_solver_parameters.parse_parameters(prm);
+  }
+  prm.leave_subsection();
+
+  prm.enter_subsection("Linear solver parameters - Zeroth step");
+  {
+    zeroth_step_solver_parameters.parse_parameters(prm);
+  }
+  prm.leave_subsection();
+}
+
+
+
+template<typename Stream>
+Stream& operator<<(Stream &stream, const ProjectionSolverParametersBase &prm)
+{
+  switch (prm.convective_term_weak_form) {
+    case ConvectiveTermWeakForm::standard:
+      internal::add_line(stream, "Convective term weak form", "standard");
+      break;
+    case ConvectiveTermWeakForm::rotational:
+      internal::add_line(stream, "Convective term weak form", "rotational");
+      break;
+    case ConvectiveTermWeakForm::divergence:
+      internal::add_line(stream, "Convective term weak form", "divergence");
+      break;
+    case ConvectiveTermWeakForm::skewsymmetric:
+      internal::add_line(stream, "Convective term weak form", "skew-symmetric");
+      break;
+    default:
+      AssertThrow(false, ExcMessage("Unexpected type identifier for the "
+                               "weak form of the convective term."));
+      break;
+  }
+
+  switch (prm.convective_term_time_discretization) {
+    case ConvectiveTermTimeDiscretization::semi_implicit:
+      internal::add_line(stream, "Convective temporal form", "semi-implicit");
+      break;
+    case ConvectiveTermTimeDiscretization::fully_explicit:
+      internal::add_line(stream, "Convective temporal form", "explicit");
+      break;
+    default:
+      AssertThrow(false,
+                  ExcMessage("Unexpected type identifier for the "
+                             "time discretization of the convective term."));
+      break;
+  }
+
+  internal::add_line(stream, "Preconditioner update frequency", prm.preconditioner_update_frequency);
+
+  stream << prm.diffusion_step_solver_parameters;
+
+  stream << "\r";
+
+  stream << prm.projection_step_solver_parameters;
+
+  stream << "\r";
+
+  stream << prm.correction_step_solver_parameters;
+
+  stream << "\r";
+
+  stream << prm.zeroth_step_solver_parameters;
+
+  stream << "\r";
+
+  internal::add_header(stream);
+
+  return (stream);
+}
+
+
+
 NavierStokesParameters::NavierStokesParameters()
 :
 pressure_correction_scheme(PressureCorrectionScheme::rotational),
@@ -1713,6 +1929,11 @@ template std::ostream & RMHD::RunTimeParameters::operator<<
 (std::ostream &, const RMHD::RunTimeParameters::DimensionlessNumbers &);
 template dealii::ConditionalOStream & RMHD::RunTimeParameters::operator<<
 (dealii::ConditionalOStream &, const RMHD::RunTimeParameters::DimensionlessNumbers &);
+
+template std::ostream & RMHD::RunTimeParameters::operator<<
+(std::ostream &, const RMHD::RunTimeParameters::ProjectionSolverParametersBase &);
+template dealii::ConditionalOStream & RMHD::RunTimeParameters::operator<<
+(dealii::ConditionalOStream &, const RMHD::RunTimeParameters::ProjectionSolverParametersBase &);
 
 template std::ostream & RMHD::RunTimeParameters::operator<<
 (std::ostream &, const RMHD::RunTimeParameters::NavierStokesParameters &);

@@ -103,6 +103,73 @@ struct Scratch : ScratchBase<dim>
 
 } // namespace Generic
 
+
+
+namespace ProjectionSolverBase
+{
+
+
+
+namespace VectorFieldConstantMatrices
+{
+
+
+
+using Copy = Generic::Matrix::MassStiffnessCopy;
+
+template <int dim>
+struct Scratch : Generic::Matrix::Scratch<dim>
+{
+  Scratch(const Mapping<dim>        &mapping,
+          const Quadrature<dim>     &quadrature_formula,
+          const FiniteElement<dim>  &fe,
+          const UpdateFlags         update_flags);
+
+  Scratch(const Scratch<dim>    &data);
+
+  std::vector<Tensor<1, dim>> phi;
+
+  std::vector<Tensor<2, dim>> grad_phi;
+};
+
+
+
+} // namespace VectorFieldConstantMatrices
+
+
+
+namespace ScalarFieldsConstantMatrices
+{
+
+
+
+
+using Copy = Generic::Matrix::MassStiffnessCopy;
+
+template <int dim>
+struct Scratch : Generic::Matrix::Scratch<dim>
+{
+  Scratch(const Mapping<dim>        &mapping,
+          const Quadrature<dim>     &quadrature_formula,
+          const FiniteElement<dim>  &fe,
+          const UpdateFlags         update_flags);
+
+  Scratch(const Scratch<dim>        &data);
+
+  std::vector<double>         phi;
+
+  std::vector<Tensor<1, dim>> grad_phi;
+};
+
+
+
+} // namespace ScalarFieldsConstantMatrices
+
+
+
+} // namespace ProjectionSolverBase
+
+
 namespace NavierStokesProjection
 {
 

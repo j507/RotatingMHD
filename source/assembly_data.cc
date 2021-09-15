@@ -111,6 +111,86 @@ fe_values(data.fe_values.get_mapping(),
 
 } // namespace Generic
 
+
+
+namespace ProjectionSolverBase
+{
+
+
+
+namespace VectorFieldConstantMatrices
+{
+
+
+
+template <int dim>
+Scratch<dim>::Scratch(
+  const Mapping<dim>        &mapping,
+  const Quadrature<dim>     &quadrature_formula,
+  const FiniteElement<dim>  &fe,
+  const UpdateFlags         update_flags)
+:
+Generic::Matrix::Scratch<dim>(mapping,
+                              quadrature_formula,
+                              fe,
+                              update_flags),
+phi(this->dofs_per_cell),
+grad_phi(this->dofs_per_cell)
+{}
+
+
+
+template <int dim>
+Scratch<dim>::Scratch(const Scratch<dim> &data)
+:
+Generic::Matrix::Scratch<dim>(data),
+phi(data.dofs_per_cell),
+grad_phi(data.dofs_per_cell)
+{}
+
+
+
+} // namespace VectorFieldConstantMatrices
+
+
+
+namespace ScalarFieldsConstantMatrices
+{
+
+
+
+template <int dim>
+Scratch<dim>::Scratch(
+  const Mapping<dim>        &mapping,
+  const Quadrature<dim>     &quadrature_formula,
+  const FiniteElement<dim>  &fe,
+  const UpdateFlags         update_flags)
+:
+Generic::Matrix::Scratch<dim>(mapping,
+                              quadrature_formula,
+                              fe,
+                              update_flags),
+phi(this->dofs_per_cell),
+grad_phi(this->dofs_per_cell)
+{}
+
+
+
+template <int dim>
+Scratch<dim>::Scratch(const Scratch<dim> &data)
+:
+Generic::Matrix::Scratch<dim>(data),
+phi(data.dofs_per_cell),
+grad_phi(data.dofs_per_cell)
+{}
+
+
+
+} // namespace ScalarFieldsConstantMatrices
+
+
+} // namespace ProjectionSolverBase
+
 } // namespace AssemblyData
 
 } // namespace RMHD
@@ -123,3 +203,10 @@ template struct RMHD::AssemblyData::Generic::Matrix::Scratch<3>;
 
 template struct RMHD::AssemblyData::Generic::RightHandSide::Scratch<2>;
 template struct RMHD::AssemblyData::Generic::RightHandSide::Scratch<3>;
+
+template struct RMHD::AssemblyData::ProjectionSolverBase::VectorFieldConstantMatrices::Scratch<2>;
+template struct RMHD::AssemblyData::ProjectionSolverBase::VectorFieldConstantMatrices::Scratch<3>;
+
+template struct RMHD::AssemblyData::ProjectionSolverBase::ScalarFieldsConstantMatrices::Scratch<2>;
+template struct RMHD::AssemblyData::ProjectionSolverBase::ScalarFieldsConstantMatrices::Scratch<3>;
+
